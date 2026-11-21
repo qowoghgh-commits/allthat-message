@@ -5506,12 +5506,15 @@ function aiBadgeHTML(e) {
 function aiMarkHTML(e) { return aiPendingIds().has(e.id) ? '<span class="ai-mark wn" title="기존 방식과 Gemini 결과가 달라요">⚠</span>' : ''; }
 // 보내기 전에 이름·전화번호 가리기
 const AI_NOT_NAME = /^(?:우리|해당|전체|모든|각|일반|신입|재학|담임|학급|학년|다른|여러|남|여|본교|타교|전학|우수|대상)$/;
+// 숫자 바로 뒤에 오는 학교 낱말 (「1-2교시」「5-6학년」「3-1반 교실」 등) → 이름으로 가리지 않음
+const AI_NOT_NAME2 = /^(?:교시|학년|학기|차시|시간|교실|모둠|분단|층|호실|번째|주차|일차|시간째|반|번|명|개|월|일|시|분|쪽|과|단원|모임|수업|체육|강당|운동장|교무실|연구실)/;
 function aiMask(text) {
   let s = String(text || '');
   s = s.replace(/01[016789][-\s.]?\d{3,4}[-\s.]?\d{4}/g, '010-○○○○-○○○○');
   s = s.replace(/([가-힣]{2,4})(?=\s*(?:학생|어머님|어머니|아버님|아버지|학부모|군|양)(?![가-힣]))/g, m => AI_NOT_NAME.test(m) ? m : '○○○');
   s = s.replace(/((?:학생|이름|성명|아동)\s*[:：]\s*)([가-힣]{2,4})/g, '$1○○○');
-  s = s.replace(/(\d{1,2}\s*[-반]\s*\d{0,2}\s*(?:번)?\s*)([가-힣]{2,4})(?=\s*[,(·\/]|\s*$|\s+[가-힣]{2,4}[,(·\/])/gm, (m, a) => a + '○○○');
+  // 「5-3 홍길동」「3반 12번 김OO」 꼴의 이름 (단, 「1-2교시」「5-6학년」처럼 숫자 뒤에 붙는 학교 낱말은 이름이 아님)
+  s = s.replace(/(\d{1,2}\s*[-반]\s*\d{0,2}\s*(?:번)?\s*)([가-힣]{2,4})(?=\s*[,(·\/]|\s*$|\s+[가-힣]{2,4}[,(·\/])/gm, (m, a, n) => AI_NOT_NAME2.test(n) || AI_NOT_NAME.test(n) ? m : a + '○○○');
   return s;
 }
 // Gemini 답 형식 (정해진 형식으로만 답하게 → 깨지거나 잘리는 일이 줄어듦)
@@ -6304,7 +6307,14 @@ window.allthatBridge = {
   hasLocal: () => state.events.length > 0 || state.messages.length > 0,
   resetLocal() { state = { messages: [], events: [] }; save(); render(); },
   applyRemote({ adds, updates, removes }) {
-    const put = (e, d) => { Object.assign(e, { date: d.date, endDate: d.endDate || '', time: d.time || '', period: d.period || '', title: d.title || '(제목 없음)', place: d.place || '', category: d.category || '일정', deadline: !!d.deadline, done: !!d.done, todos: Array.isArray(d.todos) ? d.todos.map(t => ({ t: t.t, done: !!t.done })) : [] }); if (d.summary) e.aiSum = d.summary; else delete e.aiSum; };
+    // 클라우드 글자는 이름이 ○○○로 가려져 있어요 → 이 브라우저의 원래 글자를 가린 것과 같으면 원래 글자를 그대로 둬요
+    const keep = (local, remote) => { if (!local || !remote) return remote; const m = aiMask(local).replace(/\s+/g, ' ').trim(); return m === remote || (m.startsWith(remote) && remote.length >= 20) ? local : remote; };
+    const put = (e, d) => {
+      const oldTodos = Array.isArray(e.todos) ? e.todos.map(t => typeof t === 'string' ? t : t.t) : [];
+      Object.assign(e, { date: d.date, endDate: d.endDate || '', time: d.time || '', period: keep(e.period, d.period || ''), title: keep(e.title, d.title || '(제목 없음)'), place: keep(e.place, d.place || ''), category: d.category || '일정', deadline: !!d.deadline, done: !!d.done,
+        todos: Array.isArray(d.todos) ? d.todos.map((t, i) => ({ t: keep(oldTodos[i], t.t), done: !!t.done })) : [] });
+      if (d.summary) e.aiSum = keep(e.aiSum, d.summary); else delete e.aiSum;
+    };
     adds.forEach(d => { if (!d.date) return; const e = { id: d.id, msgId: null, addedAt: Date.now(), src: '', fromCloud: true }; put(e, d); state.events.push(e); });
     updates.forEach(d => { const e = state.events.find(x => String(x.id) === d.id); if (e) put(e, d); });
     if (removes.length) state.events = state.events.filter(e => !removes.includes(String(e.id)));

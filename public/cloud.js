@@ -16,7 +16,7 @@ export function cloudDoc(e) {
   return {
     date: okDate(e.date), endDate: okDate(e.endDate),
     time: /^\d{1,2}:\d{2}$/.test(e.time || '') ? e.time : '',
-    period: txt(e.period, 20), title: txt(e.title, 80), summary: txt(e.aiSum, 120), place: txt(e.place, 40),
+    period: String(e.period || '').replace(/\s+/g, ' ').trim().slice(0, 20), title: txt(e.title, 80), summary: txt(e.aiSum, 120), place: txt(e.place, 40),
     category: ['제출·마감', '회의·연수', '행사·학사', '일정'].includes(e.category) ? e.category : '일정',
     deadline: !!e.deadline, done: !!e.done,
     todos: (Array.isArray(e.todos) ? e.todos : []).slice(0, 20).map(t => ({ t: txt(typeof t === 'string' ? t : t.t, 80), done: !!(t && t.done) })),
