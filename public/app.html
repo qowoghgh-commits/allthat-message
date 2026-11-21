@@ -1312,6 +1312,13 @@ body.board-mode #nBanner{left:8px;right:8px;width:auto;bottom:8px}
 .mbar{display:flex;align-items:baseline;gap:10px;margin:16px 0 4px;padding:7px 14px;background:var(--hover);border:1px solid var(--line);border-radius:10px;z-index:6}
 .mbar .mb-name{font-family:"BM JUA_TTF","BM JUA_OTF","배달의민족 주아","BM Jua","Jua","Malgun Gothic",sans-serif;font-size:17px;color:var(--text)}
 .mbar .mb-cnt{font-size:12.5px;color:var(--muted)}
+.mbar .mb-emo{font-size:17px}
+/* 달마다 다른 색: 왼쪽 굵은 띠 + 옅은 바탕 + 달 이름 색 (옆 달끼리 헷갈리지 않게) */
+.mbar{border-left-width:6px;border-radius:0 10px 10px 0}
+.mb-m1{--mc:#3b82c4}.mb-m2{--mc:#6a5acd}.mb-m3{--mc:#3f9b5a}.mb-m4{--mc:#d6538a}.mb-m5{--mc:#e0782f}.mb-m6{--mc:#2e9e8f}
+.mb-m7{--mc:#1f8fc9}.mb-m8{--mc:#d9534f}.mb-m9{--mc:#c98a1b}.mb-m10{--mc:#b5562b}.mb-m11{--mc:#8a6d3b}.mb-m12{--mc:#2f7d4f}
+.mbar[class*="mb-m"]{border-color:color-mix(in srgb,var(--mc) 35%,transparent);border-left-color:var(--mc);background:color-mix(in srgb,var(--mc) 12%,var(--panel,#fff))}
+.mbar[class*="mb-m"] .mb-name{color:var(--mc)}
 @media (min-width:701px){.mbar{position:sticky;top:var(--mbar-top,64px)}.mbar ~ .day:not(.day-s) .day-lbl{top:calc(var(--mbar-top,64px) + 50px)!important}}
 .evtable tr.mrow td{background:var(--hover);font-weight:700;font-size:13.5px;padding:6px 10px;border-top:2px solid var(--line)}
 .hz .linkbtn{margin-left:auto;font-family:"Malgun Gothic",sans-serif}
@@ -3759,7 +3766,7 @@ function renderUpcoming(opts = {}) {
       }
     }
     const mon = k.slice(0, 7);
-    if (mon !== lastMon) { lastMon = mon; html += `<div class="mbar" id="mon-${mon}"><span class="mb-name">${+mon.slice(0, 4)}년 ${+mon.slice(5)}월</span><span class="mb-cnt">일정 ${monCount[mon]}개</span></div>`; }
+    if (mon !== lastMon) { lastMon = mon; const mm = +mon.slice(5); html += `<div class="mbar mb-m${mm}" id="mon-${mon}"><span class="mb-emo" aria-hidden="true">${MON_EMO[mm - 1]}</span><span class="mb-name">${+mon.slice(0, 4)}년 ${mm}월</span><span class="mb-cnt">일정 ${monCount[mon]}개</span></div>`; }
     const n = diffDays(k, t), d = toDate(k);
     const rel = n === 0 ? '오늘' : n === 1 ? '내일' : n > 0 ? 'D-' + n : -n + '일 전';
     const cls = [n === 0 ? 'today' : '', n > 0 && n <= 3 ? 'soon' : '', d.getDay() === 0 || ac.some(a => a.holiday || a.kind === '휴업일') ? 'sun' : '', d.getDay() === 6 ? 'sat' : ''].join(' ');
@@ -4591,6 +4598,8 @@ document.addEventListener('click', async e => {
   else if (act === 'copy' && l) { try { await navigator.clipboard.writeText(l.u); toast('링크 주소를 복사했어요.'); } catch (er) { prompt('링크 주소', l.u); } }
 });
 document.addEventListener('input', e => { if (e.target.id === 'ibSearch') { ibQuery = e.target.value; ibLimit = 50; render(); const s = document.getElementById('ibSearch'); if (s) { s.focus(); s.setSelectionRange(s.value.length, s.value.length); } } });
+// 📅 월 구분 띠: 달마다 계절 그림 (색은 CSS .mb-m1~12)
+const MON_EMO = ['⛄', '🧣', '🌱', '🌸', '🌷', '🌿', '🌊', '🍉', '🍁', '🍂', '🍃', '🎄'];
 // 📅 월 구분 띠가 붙을 높이 = 위쪽 머리말 + (넓은 화면에서 붙어 있는) 검색 줄
 function mbarTops() {
   const h = document.querySelector('header'), lh = document.querySelector('.split-list>.lhead, .calview>.lhead');
