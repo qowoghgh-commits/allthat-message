@@ -4716,7 +4716,9 @@ function restore(file) {
     const bodies = d.inboxBodies || {}; delete d.inboxBodies;
     try { await idb.setMany(Object.entries(bodies).map(([id, b]) => ['body:' + id, b])); }
     catch (e) { (d.inbox || []).forEach(it => { if (bodies[it.id]) it.body = bodies[it.id]; }); }
-    state = d; save(); render(); toast('백업을 불러왔어요.');
+    state = d;
+    if (window.allthatCloud && window.allthatCloud.forget) window.allthatCloud.forget();   // ☁️ 백업에 없는 클라우드 일정은 지우지 않고 다시 받아 옴
+    save(); render(); toast('백업을 불러왔어요.');
   }).catch(() => alert('백업 파일을 읽지 못했어요. 이 프로그램에서 저장한 .json 파일인지 확인하세요.'));
 }
 async function readTextFile(file) {
@@ -6187,7 +6189,8 @@ function nApply(d) {
   state = d.state;
   try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
   nSetInfo({ known: d.savedAt, localAt: d.savedAt });
-  render(); if (window.allthatCloud) window.allthatCloud.queue();
+  // ☁️ 다른 PC 내용으로 통째로 바뀜 → 없어진 일정을 클라우드에서 지우지 않고, 처음부터 다시 맞춤
+  render(); if (window.allthatCloud) { if (window.allthatCloud.forget) window.allthatCloud.forget(); else window.allthatCloud.queue(); }
 }
 // 다른 PC가 더 새로 저장했을 때: 이 브라우저에서 고친 게 없으면 바로 불러오고, 있으면 묻기
 async function nSync(why) {

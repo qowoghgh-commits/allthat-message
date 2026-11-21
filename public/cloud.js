@@ -53,7 +53,14 @@ async function start() {
       const map = loadMap(user.uid), local = new Map(B.events().filter(e => e && e.id && !e.ac && okDate(e.date)).map(e => [String(e.id), e]));
       const ops = [];
       local.forEach((e, id) => { const d = cloudDoc(e), h = print(d); if (map[id] !== h) ops.push(['set', id, d, h]); });
-      Object.keys(map).forEach(id => { if (!local.has(id)) ops.push(['del', id]); });
+      const dels = Object.keys(map).filter(id => !local.has(id));
+      // 🛡 안전장치: 한꺼번에 많이 없어졌으면(3개 이상이면서 전체의 30% 넘게, 또는 이 브라우저 목록이 비었으면) 지우기 전에 묻기
+      const known = Object.keys(map).length;
+      if (dels.length >= 3 && (local.size === 0 || dels.length > known * 0.3)) {
+        const ok = confirm(`이 브라우저에서 일정 ${dels.length}개가 한꺼번에 없어졌어요.\n\n확인: 클라우드(휴대폰 등)에서도 지워요\n취소: 지우지 않고, 클라우드에 있는 일정을 이 브라우저로 다시 받아 와요`);
+        if (!ok) { busy = false; restart(); return; }
+      }
+      dels.forEach(id => ops.push(['del', id]));
       for (let i = 0; i < ops.length; i += 400) {
         const b = F.writeBatch(db);
         ops.slice(i, i + 400).forEach(([k, id, d]) => k === 'set' ? b.set(F.doc(col(), id), { ...d, updatedAt: F.serverTimestamp() }) : b.delete(F.doc(col(), id)));
@@ -90,6 +97,14 @@ async function start() {
     }, e => { console.error(e); B.cloudUi('err', '클라우드 일정을 읽지 못했어요'); });
   }
 
+  // 「맞춘 기록」을 버리고 처음부터 다시 맞추기: 클라우드에만 있는 일정은 받아 오고, 이 브라우저에만 있는 일정은 올림 (지우지 않음)
+  function restart() {
+    if (!user) return;
+    try { localStorage.removeItem(MAPK(user.uid)); } catch (e) {}
+    if (unsub) { unsub(); unsub = null; }
+    ready = false; B.cloudUi('sync'); listen();
+  }
+
   A.onAuthStateChanged(auth, async u => {
     if (unsub) { unsub(); unsub = null; }
     user = null; ready = false;
@@ -101,6 +116,8 @@ async function start() {
       resetLocalAll();
     }
     try { localStorage.setItem(OWNER, u.uid); } catch (e) {}
+    // 🛡 이 브라우저 목록이 비어 있는데 예전 맞춘 기록만 남아 있으면(저장 공간이 지워진 경우 등) 기록을 버림 → 클라우드 일정을 지우지 않고 다시 받아 옴
+    if (!B.hasLocal()) { try { localStorage.removeItem(MAPK(u.uid)); } catch (e) {} }
     user = u; B.cloudUi('sync'); listen();
   });
 
@@ -117,6 +134,8 @@ async function start() {
       }
     },
     signedIn: () => !!user,
+    // 목록이 통째로 바뀔 때(N 드라이브·백업 불러오기) 부르기: 없어진 일정을 클라우드에서 지우지 않고 다시 받아 옴
+    forget() { restart(); },
     async signOut(clearLocal) {
       clearTimeout(timer); if (user && ready) await push();
       await A.signOut(auth);
