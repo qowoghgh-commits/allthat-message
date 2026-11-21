@@ -1308,6 +1308,12 @@ body.board-mode #nBanner{left:8px;right:8px;width:auto;bottom:8px}
 .lmode button.on{background:var(--text);color:var(--bg);font-weight:700}
 .hz{display:flex;align-items:baseline;gap:8px;margin:18px 0 2px;padding-bottom:4px;border-bottom:2px solid var(--line);font-family:"BM JUA_TTF","BM JUA_OTF","배달의민족 주아","BM Jua","Jua","Malgun Gothic",sans-serif;font-size:19px;color:var(--text)}
 .hz b{font-family:"Malgun Gothic",sans-serif;font-size:13px;color:var(--muted);background:var(--hover);border-radius:999px;padding:0 8px}
+/* 📅 월 구분 띠: 달이 바뀌는 곳마다 · 넓은 화면에서는 내려도 위에 붙어 있음 */
+.mbar{display:flex;align-items:baseline;gap:10px;margin:16px 0 4px;padding:7px 14px;background:var(--hover);border:1px solid var(--line);border-radius:10px;z-index:6}
+.mbar .mb-name{font-family:"BM JUA_TTF","BM JUA_OTF","배달의민족 주아","BM Jua","Jua","Malgun Gothic",sans-serif;font-size:17px;color:var(--text)}
+.mbar .mb-cnt{font-size:12.5px;color:var(--muted)}
+@media (min-width:701px){.mbar{position:sticky;top:var(--mbar-top,64px)}.mbar ~ .day:not(.day-s) .day-lbl{top:calc(var(--mbar-top,64px) + 50px)!important}}
+.evtable tr.mrow td{background:var(--hover);font-weight:700;font-size:13.5px;padding:6px 10px;border-top:2px solid var(--line)}
 .hz .linkbtn{margin-left:auto;font-family:"Malgun Gothic",sans-serif}
 .hz-more{width:100%;justify-content:center;border:1px dashed var(--line);border-radius:10px;background:var(--bg);color:var(--muted);cursor:pointer;padding:10px;font-size:16px}
 .hz-more:hover{background:var(--hover);color:var(--text)}
@@ -1458,6 +1464,7 @@ body.board-mode #nBanner{left:8px;right:8px;width:auto;bottom:8px}
           <li>메시지 원문·메시지함은 지금처럼 <b>이 브라우저에만</b> 남아요. 클라우드에는 일정·요약만 올릴 예정이에요. (구글 로그인 준비 중)</li>
           <li>Gemini 키는 코드에 들어 있지 않아요. 각자 ⚙ 설정에서 넣고, 이 브라우저에만 저장돼요.</li>
           <li>PC 파일로 여는 AI판·기본판과 저장 공간이 따로라서 서로 섞이지 않아요.</li>
+          <li>📅 일정 목록에 <b>월 구분 띠</b>(「2026년 12월 · 일정 9개」)가 생겼어요. 넓은 화면에서는 내려도 위에 붙어 있어 지금 몇 월인지 보여요. 표 보기에도 월 줄이 들어가요.</li>
           <li>📬 위쪽 <b>「📬 알림판」</b> 버튼을 누르면 작은 창으로 알림판이 열려요. 큰 화면에서 고치면 알림판에도 바로 반영돼요.</li>
           <li><a href="index.html">🏠 3가지 판 소개 페이지</a>로 돌아가기</li>
         </ul>
@@ -3717,10 +3724,14 @@ function renderUpcoming(opts = {}) {
   if (!showArchive && listModeOf() === 'table') {
     const rows = list.filter(e => { const g = gmap.get(gkey(e)); return !g || g[0] === e; });
     const isDue = fCat === '제출·마감';
+    // 📅 달이 바뀌는 첫 줄 앞에 「○년 ○월 · 일정 n개」 줄
+    const monOf = e => (isTodo(e) ? (e.endDate || e.date) : e.date).slice(0, 7), mCnt = {}, mFirst = new Set();
+    let lmk = ''; rows.forEach(e => { const mk = monOf(e); mCnt[mk] = (mCnt[mk] || 0) + 1; if (mk !== lmk) { mFirst.add(e); lmk = mk; } });
+    const mrowOf = e => { if (!mFirst.has(e)) return ''; const mk = monOf(e); return `<tr class="mrow"><td colspan="7">📅 ${+mk.slice(0, 4)}년 ${+mk.slice(5)}월 <span class="muted">· 일정 ${mCnt[mk]}개</span></td></tr>`; };
     return html + `<div class="tblwrap"><table class="evtable"><thead><tr><th>${isDue ? '마감' : '날짜'}</th><th></th><th>제목</th><th>${isDue ? '어디로' : '어디서 · 어디로'}</th><th>${isDue ? '어떻게' : '어떻게 · 누가'}</th><th>보낸 곳</th><th>완료</th></tr></thead><tbody>
-      ${rows.map(e => { const dd = dday(e), s = eventSlots(e), m = msgOf(e), g = gmap.get(gkey(e)), due = isTodo(e);
+      ${rows.map(e => { const mr = mrowOf(e); const dd = dday(e), s = eventSlots(e), m = msgOf(e), g = gmap.get(gkey(e)), due = isTodo(e);
         const when = `${fmtDate(due ? (e.endDate || e.date) : e.date)}${!due && e.endDate && e.endDate !== e.date ? ' ~ ' + fmtDate(e.endDate) : ''}${e.time ? ' ' + e.time : e.period ? ' ' + e.period : ''}${due ? '까지' : ''}${g && g.length > 1 ? ` 외 ${g.length - 1}일` : ''}`;
-        return `<tr class="${CAT_CLS[e.category] || 'c4'}${e.done ? ' is-done' : ''}${dd.cls === 'd0' || dd.cls === 'near' || dd.cls === 'past' ? ' hot' : ''}">
+        return mr + `<tr class="${CAT_CLS[e.category] || 'c4'}${e.done ? ' is-done' : ''}${dd.cls === 'd0' || dd.cls === 'near' || dd.cls === 'past' ? ' hot' : ''}">
           <td class="t-when">${due ? '⏰ ' : ''}${esc(when)}</td><td><span class="er-dd ${dd.cls}">${dd.label}</span></td>
           <td class="t-title"><span title="${esc(e.category)}">${(SLOT_DEF[e.category] || SLOT_DEF['일정']).icon}</span> <button type="button" class="linkbtn" data-open="${e.id}" title="눌러서 보기·수정">${esc(e.title)}</button>${isNew(e) ? ' <span class="newtag">NEW</span>' : ''}</td>
           <td>${esc(s.to || s.where || '')}</td><td>${esc(s.how || s.who || '')}</td><td class="muted">${esc(m ? (m.sender || m.source || '') : '직접')}</td>
@@ -3734,7 +3745,9 @@ function renderUpcoming(opts = {}) {
   const keys = showArchive ? [...groups.keys()].sort().reverse() : [...groups.keys()].sort();
   const hzCount = {}; keys.forEach(k => { const g = groups.get(k); hzCount[hzOf(k)] = (hzCount[hzOf(k)] || 0) + g.ev.length + g.ac.length; });
   const laterOpen = !!getPref().laterOpen || !!fQuery;
-  let lastHz = '';
+  // 📅 월 구분 띠: 달마다 일정 개수 (일정·학사일정 합)
+  const monCount = {}; keys.forEach(k => { const g = groups.get(k); monCount[k.slice(0, 7)] = (monCount[k.slice(0, 7)] || 0) + g.ev.length + g.ac.length; });
+  let lastHz = '', lastMon = '';
   for (const k of keys) {
     const { ev, ac, ref, end } = groups.get(k);
     if (useHz) {
@@ -3745,6 +3758,8 @@ function renderUpcoming(opts = {}) {
         html += `<div class="hz">${hz} <b>${hzCount[hz]}</b>${hz === '그 이후' ? '<button type="button" class="linkbtn" data-later="0">▴ 접기</button>' : ''}</div>`;
       }
     }
+    const mon = k.slice(0, 7);
+    if (mon !== lastMon) { lastMon = mon; html += `<div class="mbar" id="mon-${mon}"><span class="mb-name">${+mon.slice(0, 4)}년 ${+mon.slice(5)}월</span><span class="mb-cnt">일정 ${monCount[mon]}개</span></div>`; }
     const n = diffDays(k, t), d = toDate(k);
     const rel = n === 0 ? '오늘' : n === 1 ? '내일' : n > 0 ? 'D-' + n : -n + '일 전';
     const cls = [n === 0 ? 'today' : '', n > 0 && n <= 3 ? 'soon' : '', d.getDay() === 0 || ac.some(a => a.holiday || a.kind === '휴업일') ? 'sun' : '', d.getDay() === 6 ? 'sat' : ''].join(' ');
@@ -4576,8 +4591,17 @@ document.addEventListener('click', async e => {
   else if (act === 'copy' && l) { try { await navigator.clipboard.writeText(l.u); toast('링크 주소를 복사했어요.'); } catch (er) { prompt('링크 주소', l.u); } }
 });
 document.addEventListener('input', e => { if (e.target.id === 'ibSearch') { ibQuery = e.target.value; ibLimit = 50; render(); const s = document.getElementById('ibSearch'); if (s) { s.focus(); s.setSelectionRange(s.value.length, s.value.length); } } });
+// 📅 월 구분 띠가 붙을 높이 = 위쪽 머리말 + (넓은 화면에서 붙어 있는) 검색 줄
+function mbarTops() {
+  const h = document.querySelector('header'), lh = document.querySelector('.split-list>.lhead, .calview>.lhead');
+  let top = h ? h.getBoundingClientRect().height : 0;
+  if (lh) { const cs = getComputedStyle(lh); if (cs.position === 'sticky') top = (parseFloat(cs.top) || 0) + lh.getBoundingClientRect().height; }
+  document.documentElement.style.setProperty('--mbar-top', Math.round(top) + 'px');
+}
+window.addEventListener('resize', () => requestAnimationFrame(mbarTops));
 function render() {
   if (BOARD) { if (boardReady) renderBoard(); return; }
+  requestAnimationFrame(mbarTops);
   const t = todayStr();
   document.getElementById('cntUp').textContent = state.events.filter(e => (e.endDate || e.date) >= t).length;
   document.getElementById('cntTodo').textContent = state.events.filter(e => isTodo(e) && !e.done).length;
