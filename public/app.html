@@ -1454,7 +1454,7 @@ body.board-mode #nBanner{left:8px;right:8px;width:auto;bottom:8px}
         <p class="muted small-text">업데이트 2026. 11. 21. · AI판 v2.5에서 출발</p>
         <h3>☁️ 웹판에서 달라진 점</h3>
         <ul>
-          <li>웹 주소로 여는 판이에요. Gemini 다듬기(AI판 기능)가 처음부터 켜져 있어요.</li>
+          <li>웹 주소로 여는 판이에요. <b>모든 메시지를 Gemini로 자동으로 다듬어요</b>(끌 수 없어요). 새 메시지는 넣자마자, 아직 안 다듬은 메시지는 웹판을 열 때 다듬어요. 다듬는 중에 들어온 메시지도 이어서 다듬어요.</li>
           <li>메시지 원문·메시지함은 지금처럼 <b>이 브라우저에만</b> 남아요. 클라우드에는 일정·요약만 올릴 예정이에요. (구글 로그인 준비 중)</li>
           <li>Gemini 키는 코드에 들어 있지 않아요. 각자 ⚙ 설정에서 넣고, 이 브라우저에만 저장돼요.</li>
           <li>PC 파일로 여는 AI판·기본판과 저장 공간이 따로라서 서로 섞이지 않아요.</li>
@@ -5439,8 +5439,9 @@ if (fsSupported) (async () => {
    · 날짜가 다르거나 Gemini가 "일정 아님"이라 하면 ⚠ 확인 목록으로 (선생님이 고름)
    · Gemini만 찾은 일정은 🤖 새 후보로 (확인해야 들어감)
    키는 이 PC(브라우저 저장소)에만 두고, 보낼 때 학생·학부모 이름과 전화번호를 가림 */
-const aiCfg = () => ({ key: '', auto: true, mask: true, model: '', ...(getPref().ai || {}) });
-const aiSet = p => setPref({ ai: { ...aiCfg(), ...p } });
+// ☁️ 웹판: 메시지는 항상(무조건) Gemini로 다듬음 → auto 는 끌 수 없음
+const aiCfg = () => ({ key: '', auto: true, mask: true, model: '', ...(getPref().ai || {}), ...(WEB_BUILD ? { auto: true } : {}) });
+const aiSet = p => { setPref({ ai: { ...aiCfg(), ...p } }); if (typeof aiKeyBar === 'function') aiKeyBar(); };
 let aiRunning = false, aiStopReq = false, aiProg = { done: 0, total: 0, same: 0, auto: 0, warn: 0, newc: 0, msg: '' }, aiFilt = '';
 function aiPendingIds() { const s = new Set(); (state.aiReview || []).forEach(r => { if (r.eid) s.add(r.eid); }); return s; }
 function aiBadgeHTML(e) {
@@ -5726,13 +5727,37 @@ async function aiRun(onlyIds) {
     aiProg.msg = ''; save(); render();
   }
   aiRunning = false;
+  // 다듬는 동안 새로 들어온 메시지가 있으면 이어서 다듬기 (웹판: 빠짐없이)
+  if (aiWaitIds.size && !fatal && !aiStopReq) { const w = [...aiWaitIds]; aiWaitIds.clear(); setTimeout(() => aiRun(w), 1500); }
   if (!aiProg.msg) aiProg.msg = aiStopReq ? '잠시 멈췄어요. 다시 누르면 이어서 해요.' : `✓ 다 다듬었어요${aiProg.warn + aiProg.newc ? ` · 확인할 것 ${aiProg.warn + aiProg.newc}개` : ''}${aiProg.skip ? ` · 서버가 바빠 ${aiProg.skip}개는 건너뛰었어요 (다시 누르면 그것만 해요)` : ''}`;
   render(); aiRender();
-  if (!onlyIds) return;
+  if (!onlyIds) {   // 쌓인 메시지 자동 다듬기(웹판)가 끝났을 때만 짧게 알림
+    if (WEB_BUILD && aiAutoRun && (aiProg.auto || aiProg.warn + aiProg.newc)) toast(`🤖 쌓인 메시지를 Gemini로 다듬었어요 · 고친 것 ${aiProg.auto}개${aiProg.warn + aiProg.newc ? ` · 확인할 것 ${aiProg.warn + aiProg.newc}개` : ''}`, aiProg.warn + aiProg.newc ? '확인하기' : '', aiProg.warn + aiProg.newc ? aiOpen : null);
+    aiAutoRun = false; return;
+  }
   if (aiProg.warn + aiProg.newc) toast(`🤖 Gemini가 새 메시지를 다듬었어요 · 확인할 것 ${aiProg.warn + aiProg.newc}개`, '확인하기', aiOpen);
   else if (aiProg.auto) toast(`🤖 Gemini가 제목·요약 ${aiProg.auto}개를 다듬었어요.`);
 }
-function aiAfterSave(ids) { if (AI_BUILD && ids && ids.length && aiCfg().auto && aiCfg().key) setTimeout(() => aiRun(ids), 600); }
+let aiWaitIds = new Set(), aiAutoRun = false;
+function aiAfterSave(ids) {
+  if (!AI_BUILD || DEMO || BOARD || !ids || !ids.length || !aiCfg().auto || !aiCfg().key) return;
+  if (aiRunning) { ids.forEach(i => aiWaitIds.add(i)); return; }   // 다듬는 중이면 끝난 뒤 이어서
+  setTimeout(() => aiRun(ids), 600);
+}
+// ☁️ 웹판: 열 때(그리고 키를 처음 넣었을 때) 아직 안 다듬은 메시지를 모두 자동으로 다듬기
+function aiAutoBacklog() {
+  if (!WEB_BUILD || DEMO || BOARD || aiRunning || !aiCfg().key) return;
+  aiAutoRun = true; aiRun();
+}
+// 키가 없으면 위쪽에 안내 띠 (웹판은 다듬기가 기본이라서)
+function aiKeyBar() {
+  if (!WEB_BUILD || DEMO || BOARD) return;
+  let bar = document.getElementById('aiKeyBar');
+  if (aiCfg().key) { if (bar) bar.remove(); return; }
+  if (!bar) { bar = document.createElement('div'); bar.id = 'aiKeyBar'; const sw = document.getElementById('storageWarn'); if (!sw) return; sw.after(bar); }
+  bar.innerHTML = '<div class="warnbar">🤖 웹판은 모든 메시지를 Gemini로 다듬어요. ⚙ 설정 → 「🤖 Gemini 도움」에 API 키를 넣어 주세요. <button type="button" class="btn small" id="aiKeyOpen">설정 열기</button></div>';
+}
+document.addEventListener('click', e => { if (e.target.closest('#aiKeyOpen')) { const p = document.getElementById('popCfg'); if (p) { p.open = true; const k = document.getElementById('aiKey'); if (k) setTimeout(() => k.focus(), 50); } } });
 // 확인 목록에서 고르기
 function aiPick(rid, how) {
   const r = (state.aiReview || []).find(x => x.id === rid); if (!r) return;
@@ -5878,7 +5903,7 @@ function aiCfgSection() {
   sec.innerHTML = `<h3>🤖 Gemini 도움 (AI판)</h3>
     <div class="setlist"><label class="inline" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">API 키 <input type="password" class="ai-key" id="aiKey" value="${esc(c.key)}" placeholder="구글 AI Studio에서 받은 키를 붙여 넣기" autocomplete="off"><button type="button" class="btn small" id="aiTestBtn">연결 시험</button></label>
     <p class="muted small-text" id="aiTestMsg" style="margin:4px 0 8px">${c.model ? '✓ 모델: ' + esc(c.model) : '키는 이 브라우저에만 저장돼요. 클라우드·백업 파일에도 들어가지 않아요.'}</p>
-    <label class="inline"><input type="checkbox" id="aiAuto" ${c.auto ? 'checked' : ''}> 새 메시지를 넣으면 자동으로 다듬기</label>
+    ${WEB_BUILD ? '<p class="small-text" style="margin:0 0 4px">✅ <b>웹판은 모든 메시지를 자동으로 다듬어요.</b> 새 메시지는 넣자마자, 아직 안 다듬은 메시지는 웹판을 열 때 다듬어요.</p>' : `<label class="inline"><input type="checkbox" id="aiAuto" ${c.auto ? 'checked' : ''}> 새 메시지를 넣으면 자동으로 다듬기</label>`}
     <label class="inline"><input type="checkbox" id="aiMaskCb" ${c.mask ? 'checked' : ''}> 보내기 전에 학생·학부모 이름과 전화번호 가리기</label>
     <label class="inline"><input type="checkbox" id="aiRecheck" ${c.recheck !== false ? 'checked' : ''}> 의견이 갈린 것은 한 번 더 묻기 (Pro 모델이 있으면 Pro로)</label>
     <label class="inline" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">내 학년·역할 <input type="text" class="ai-key" id="aiRole" value="${esc(c.role || '')}" placeholder="예: 5학년 담임, 정보부" style="max-width:240px"></label>
@@ -5886,7 +5911,7 @@ function aiCfgSection() {
     <p class="muted small-text" style="margin:6px 0 0">무료 키는 하루에 보낼 수 있는 양이 정해져 있고, 보낸 내용이 구글 서비스 개선에 쓰일 수 있어요.</p></div>`;
   const h2 = body.querySelector('h2'); h2 ? h2.after(sec) : body.prepend(sec);
   sec.querySelector('#aiKey').addEventListener('change', e => aiSet({ key: e.target.value.trim(), model: '' }));
-  sec.querySelector('#aiAuto').addEventListener('change', e => aiSet({ auto: e.target.checked }));
+  const aa = sec.querySelector('#aiAuto'); if (aa) aa.addEventListener('change', e => aiSet({ auto: e.target.checked }));
   sec.querySelector('#aiMaskCb').addEventListener('change', e => aiSet({ mask: e.target.checked }));
   sec.querySelector('#aiRecheck').addEventListener('change', e => aiSet({ recheck: e.target.checked }));
   sec.querySelector('#aiRole').addEventListener('change', e => aiSet({ role: e.target.value.trim().slice(0, 40) }));
@@ -5894,7 +5919,7 @@ function aiCfgSection() {
     const k = sec.querySelector('#aiKey').value.trim(), msg = sec.querySelector('#aiTestMsg'); aiSet({ key: k });
     if (!k) { msg.textContent = '키를 먼저 붙여 넣어 주세요.'; return; }
     msg.textContent = '연결하는 중…';
-    try { const m = await aiTest(k); aiSet({ model: m.flash, model2: m.pro }); msg.textContent = `✓ 연결됐어요 · 모델: ${m.flash}${m.pro ? ' · 재확인: ' + m.pro : ''}`; }
+    try { const m = await aiTest(k); aiSet({ model: m.flash, model2: m.pro }); msg.textContent = `✓ 연결됐어요 · 모델: ${m.flash}${m.pro ? ' · 재확인: ' + m.pro : ''}`; setTimeout(aiAutoBacklog, 800); }
     catch (er) { msg.textContent = /badkey/.test(er.message) ? '✕ 키가 맞지 않아요. 다시 확인해 주세요.' : `✕ 연결하지 못했어요 (${er.message}). 인터넷 연결을 확인해 주세요.`; }
   });
 }
@@ -5909,6 +5934,7 @@ document.addEventListener('click', e => {
 });
 if (AI_BUILD && !BOARD) {
   aiCfgSection(); aiHeadBtn();
+  if (WEB_BUILD && !DEMO) { aiKeyBar(); setTimeout(aiAutoBacklog, 4000); }   // 웹판: 열면 안 다듬은 메시지부터 자동으로
   document.title = WEB_BUILD ? '올댓메시지 웹판' : '올댓메시지 AI판';
   const h1 = document.getElementById('homeLink'); if (h1) h1.insertAdjacentHTML('afterend', WEB_BUILD ? ' <span class="ai-bdg ai web-bdg" style="vertical-align:middle">☁️ 웹판</span>' : ' <span class="ai-bdg ai" style="vertical-align:middle">AI판</span>');
 }
