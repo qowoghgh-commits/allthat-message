@@ -1313,6 +1313,9 @@ body.board-mode #nBanner{left:8px;right:8px;width:auto;bottom:8px}
 .mbar .mb-name{font-family:"BM JUA_TTF","BM JUA_OTF","배달의민족 주아","BM Jua","Jua","Malgun Gothic",sans-serif;font-size:17px;color:var(--text)}
 .mbar .mb-cnt{font-size:12.5px;color:var(--muted)}
 .mbar .mb-emo{font-size:17px}
+/* 펼친 카드 맨 위 줄: 누르면 접힘 */
+.evrow-open .card-head{cursor:pointer}
+.evrow-open .card-head:hover{background:var(--hover);border-radius:8px}
 /* 달마다 다른 색: 왼쪽 굵은 띠 + 옅은 바탕 + 달 이름 색 (옆 달끼리 헷갈리지 않게) */
 .mbar{border-left-width:6px;border-radius:0 10px 10px 0}
 .mb-m1{--mc:#3b82c4}.mb-m2{--mc:#6a5acd}.mb-m3{--mc:#3f9b5a}.mb-m4{--mc:#d6538a}.mb-m5{--mc:#e0782f}.mb-m6{--mc:#2e9e8f}
@@ -1471,6 +1474,8 @@ body.board-mode #nBanner{left:8px;right:8px;width:auto;bottom:8px}
           <li>메시지 원문·메시지함은 지금처럼 <b>이 브라우저에만</b> 남아요. 클라우드에는 일정·요약만 올릴 예정이에요. (구글 로그인 준비 중)</li>
           <li>Gemini 키는 코드에 들어 있지 않아요. 각자 ⚙ 설정에서 넣고, 이 브라우저에만 저장돼요.</li>
           <li>PC 파일로 여는 AI판·기본판과 저장 공간이 따로라서 서로 섞이지 않아요.</li>
+          <li>펼친 일정 카드의 <b>맨 위 줄을 누르면 접혀요</b>(「▴ 간단히」와 같아요).</li>
+          <li>출처 표시가 자세해졌어요: <b>🤖 AI가 찾음</b>(미반영 메시지에서 Gemini가 찾은 일정) · <b>☁️ 다른 기기</b>(휴대폰·다른 PC에서 만든 일정) · ✏️ 직접.</li>
           <li>📅 일정 목록에 <b>월 구분 띠</b>(「2026년 12월 · 일정 9개」)가 생겼어요. 넓은 화면에서는 내려도 위에 붙어 있어 지금 몇 월인지 보여요. 표 보기에도 월 줄이 들어가요.</li>
           <li>📬 위쪽 <b>「📬 알림판」</b> 버튼을 누르면 작은 창으로 알림판이 열려요. 큰 화면에서 고치면 알림판에도 바로 반영돼요.</li>
           <li><a href="index.html">🏠 3가지 판 소개 페이지</a>로 돌아가기</li>
@@ -3397,13 +3402,19 @@ function evHTML(e, opts = {}) {
   const dateStr = opts.noDate ? (range ? '~ ' + fmtDate(e.endDate) : '') : fmtDate(e.date) + (range ? ' ~ ' + fmtDate(e.endDate) : '');
   const tm = [e.time, e.period].filter(Boolean).join(' · ');
   const todos = todoList(e);
-  const from = m ? [m.sender, m.source].filter(Boolean).join(' · ') : '직접 추가';
+  // 메시지가 없는 일정의 출처: 🤖 미반영 메시지에서 AI가 찾음(via) · ☁️ 다른 기기(클라우드) · ✏️ 직접
+  const via = !m && e.via ? e.via : null;
+  const from = m ? [m.sender, m.source].filter(Boolean).join(' · ') : via ? [via.sender, via.source].filter(Boolean).join(' · ') + ' (미반영 메시지에서 AI가 찾음)' : e.fromCloud ? '다른 기기(휴대폰·다른 PC)에서 만든 일정' : '직접 추가';
   // 출처 표시: 카카오톡은 노란 동그란 배지, 쿨메신저는 파란 동그란 배지
   const sk = srcOfMsg(m);
   const srcBadge = sk === 'kk' ? `<span class="src-badge sb-kk" title="${esc(m.source)}">💬 카톡</span>`
     : sk === 'cool' ? `<span class="src-badge sb-cool" title="쿨메신저">🐧 쿨메</span>`
+    : via && via.src === 'kk' ? `<span class="src-badge sb-kk" title="${esc(from)}">💬 카톡 · 🤖 AI가 찾음</span>`
+    : via && via.src === 'cool' ? `<span class="src-badge sb-cool" title="${esc(from)}">🐧 쿨메 · 🤖 AI가 찾음</span>`
+    : via || (e.aiBy === 'ai' && e.src && !e.fromCloud) ? `<span class="src-badge sb-me" title="미반영 메시지에서 Gemini가 찾은 일정이에요.${e.src ? ' 근거: ' + esc(e.src) : ''}">🤖 AI가 찾음</span>`
+    : e.fromCloud ? `<span class="src-badge sb-me" title="휴대폰·다른 PC에서 만든 일정이에요. 클라우드에는 메시지 출처를 올리지 않아요.">☁️ 다른 기기</span>`
     : `<span class="src-badge sb-me">✏️ 직접</span>`;
-  const who = m ? (m.sender || '') : '';
+  const who = m ? (m.sender || '') : via ? (via.sender || '') : '';
   // 같은 메시지·같은 제목으로 날짜만 여러 개인 일정은 카드 한 장에 날짜를 모아서 보여줌
   const sibs = opts.sibs && opts.sibs.length > 1 ? opts.sibs : null;
   const fresh = sibs ? sibs.some(isNew) : isNew(e);
@@ -4598,6 +4609,12 @@ document.addEventListener('click', async e => {
   else if (act === 'copy' && l) { try { await navigator.clipboard.writeText(l.u); toast('링크 주소를 복사했어요.'); } catch (er) { prompt('링크 주소', l.u); } }
 });
 document.addEventListener('input', e => { if (e.target.id === 'ibSearch') { ibQuery = e.target.value; ibLimit = 50; render(); const s = document.getElementById('ibSearch'); if (s) { s.focus(); s.setSelectionRange(s.value.length, s.value.length); } } });
+// 펼친 일정 카드: 맨 위 줄(분류·NEW 표시 줄)의 빈 곳을 누르면 「▴ 간단히」처럼 접힘 (완료 칸·버튼은 그대로 동작)
+document.addEventListener('click', ev => {
+  const head = ev.target.closest('.evrow-open .card-head');
+  if (!head || ev.target.closest('input,label,button,a,select')) return;
+  const btn = head.closest('.evrow-open').querySelector(':scope > .er-close'); if (btn) btn.click();
+});
 // 📅 월 구분 띠: 달마다 계절 그림 (색은 CSS .mb-m1~12)
 const MON_EMO = ['⛄', '🧣', '🌱', '🌸', '🌷', '🌿', '🌊', '🍉', '🍁', '🍂', '🍃', '🎄'];
 // 📅 월 구분 띠가 붙을 높이 = 위쪽 머리말 + (넓은 화면에서 붙어 있는) 검색 줄
@@ -5797,7 +5814,10 @@ document.addEventListener('click', e => { if (e.target.closest('#aiKeyOpen')) { 
 function aiPick(rid, how) {
   const r = (state.aiReview || []).find(x => x.id === rid); if (!r) return;
   const snap = snapshot(), a = r.a, e = r.eid ? state.events.find(x => x.id === r.eid) : null;
-  const newEv = date => ({ id: uid(), msgId: String(r.src).startsWith('ib:') ? null : r.src, title: (aiGoodTitle(a.title) ? a.title : (a.title || '새 일정')).trim().slice(0, 40), todos: [], date, endDate: a.end && a.end > date ? a.end : '', time: a.time || '', period: a.period || '', place: '', category: ['제출·마감', '회의·연수', '행사·학사', '일정'].includes(a.category) ? a.category : '일정', deadline: !!a.deadline, done: false, addedAt: Date.now(), src: (a.evidence || '').slice(0, 300), aiSum: (a.summary || '').slice(0, 60), aiBy: 'ai' });
+  // 미반영 메시지(📭)에서 찾은 일정은 메시지가 없으니, 어디서 왔는지(카톡·쿨메·보낸 사람)를 via 에 남김
+  const ibItem = String(r.src).startsWith('ib:') ? (state.inbox || []).find(x => 'ib:' + x.id === r.src) : null;
+  const via = String(r.src).startsWith('ib:') ? { src: ibItem ? ibItem.src : '', source: ibItem ? (ibItem.source || '') : '', sender: ibItem ? (ibItem.sender || '') : '', date: ibItem ? (ibItem.date || '') : '' } : null;
+  const newEv = date => ({ ...(via ? { via } : {}), id: uid(), msgId: String(r.src).startsWith('ib:') ? null : r.src, title: (aiGoodTitle(a.title) ? a.title : (a.title || '새 일정')).trim().slice(0, 40), todos: [], date, endDate: a.end && a.end > date ? a.end : '', time: a.time || '', period: a.period || '', place: '', category: ['제출·마감', '회의·연수', '행사·학사', '일정'].includes(a.category) ? a.category : '일정', deadline: !!a.deadline, done: false, addedAt: Date.now(), src: (a.evidence || '').slice(0, 300), aiSum: (a.summary || '').slice(0, 60), aiBy: 'ai' });
   const cand = String(how).startsWith('c:') ? how.slice(2) : '', ruleWas = e ? `${e.date} ${e.title}`.slice(0, 40) : '';
   if (cand) { if (e) { e.date = cand; e.aiBy = 'ai'; if (a.summary) e.aiSum = a.summary.trim().slice(0, 60); } else state.events.push(newEv(cand)); }
   else if (how === 'g') {
