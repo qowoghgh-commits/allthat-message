@@ -1,0 +1,30 @@
+# Firebase 작업 파일
+.firebase/
+firebase-debug.log
+firestore-debug.log
+*.log
+
+# 비밀 값 (키·토큰은 절대 저장소에 올리지 않아요)
+.env
+.env.*
+*.key
+*secret*
+*비밀*
+
+# 작업용 참고 파일 (저장소에는 public/ 의 앱만 올려요)
+올댓메시지_AI판_출발점.html
+해커톤_시안.html
+.claude/
+GitHub_올리기/
+
+# 앱이 만드는 저장 파일 (메시지 원문이 들어 있어요 · 절대 올리지 않기)
+올댓메시지_웹판_저장.json
+*.xls
+*.xlsx
+*.txt
+!public/**/*.txt
+
+# 기타
+node_modules/
+.DS_Store
+Thumbs.db
