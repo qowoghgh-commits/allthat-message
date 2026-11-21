@@ -16,6 +16,7 @@ firestore-debug.log
 해커톤_시안.html
 .claude/
 GitHub_올리기/
+*.zip
 
 # 앱이 만드는 저장 파일 (메시지 원문이 들어 있어요 · 절대 올리지 않기)
 올댓메시지_웹판_저장.json
