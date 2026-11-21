@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>올댓메시지</title>
+<meta name="description" content="쿨메신저·카톡 속 일정을 한곳에 — 초등 교사용 메시지 정리 도우미 (기본판 · AI판 · 웹판)">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📬</text></svg>">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&display=swap">
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--text:#1f2328;--muted:#5b6270;--faint:#8b919c;--line:#e3e6eb;--blue:#1f6fc5;--blues:#e8f1fb;--ai:#6b4fd8;--ais:#f0ecfd;--fb:#f57c00;--fbs:#fff3e0;--green:#2e7d4f;--greens:#e6f4ec;--red:#d9363e}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.6 "Malgun Gothic","맑은 고딕",sans-serif}
+a{color:inherit}
+.wrap{max-width:1120px;margin:0 auto;padding:0 16px 60px}
+.hero{background:linear-gradient(135deg,#1f6fc5,#6b4fd8);color:#fff;padding:34px 16px 70px}
+.hero .in{max-width:1120px;margin:0 auto;display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.logo{width:72px;height:72px;border-radius:20px;background:rgba(255,255,255,.18);display:grid;place-items:center;font-size:44px}
+.hero h1{font-family:Jua,sans-serif;font-weight:400;font-size:38px;margin:0;line-height:1.2}
+.hero p{margin:4px 0 0;opacity:.92;font-size:16px}
+.hero .tagrow{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.hero .tg{background:rgba(255,255,255,.18);border-radius:999px;padding:2px 12px;font-size:13px}
+/* 탭 */
+.tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:-46px}
+.tab{background:#fff;border:2px solid transparent;border-radius:14px;padding:14px 16px;text-align:left;cursor:pointer;box-shadow:0 6px 20px rgba(20,30,50,.10);font:inherit;color:inherit;transition:.15s}
+.tab:hover{transform:translateY(-2px)}
+.tab:focus-visible{outline:3px solid #9cc3ef;outline-offset:2px}
+.tab .no{font:800 12px/1 sans-serif;letter-spacing:.04em;color:var(--faint)}
+.tab .nm{font-family:Jua,sans-serif;font-size:22px;margin:4px 0 2px;display:flex;align-items:center;gap:8px}
+.tab .ds{font-size:13.5px;color:var(--muted)}
+.tab.on.t1{border-color:var(--blue)}.tab.on.t2{border-color:var(--ai)}.tab.on.t3{border-color:var(--fb)}
+.tab .chip{font:700 11.5px/20px sans-serif;border-radius:999px;padding:0 8px}
+.t1 .chip{background:var(--blues);color:var(--blue)}.t2 .chip{background:var(--ais);color:var(--ai)}.t3 .chip{background:var(--fbs);color:var(--fb)}
+@media(max-width:760px){.tabs{grid-template-columns:1fr}.hero h1{font-size:30px}}
+/* 본문 */
+.panel{display:none;margin-top:18px}.panel.on{display:block}
+.grid{display:grid;grid-template-columns:1.1fr .9fr;gap:16px;align-items:start}
+@media(max-width:900px){.grid{grid-template-columns:1fr}}
+.card{background:#fff;border-radius:14px;box-shadow:0 0 0 1px rgba(15,15,15,.06),0 2px 8px rgba(15,15,15,.05);padding:18px 20px;min-width:0}
+.card h2{font-family:Jua,sans-serif;font-weight:400;font-size:22px;margin:0 0 8px}
+.card h3{font-size:15px;margin:14px 0 6px}
+.lead{color:var(--muted);margin:0 0 10px}
+ul.feat{list-style:none;padding:0;margin:0}
+ul.feat li{display:flex;gap:10px;padding:7px 0;border-bottom:1px dashed var(--line)}
+ul.feat li:last-child{border-bottom:0}
+ul.feat .i{flex:none;width:28px;height:28px;border-radius:8px;display:grid;place-items:center;font-size:15px}
+.p1 .i{background:var(--blues)}.p2 .i{background:var(--ais)}.p3 .i{background:var(--fbs)}
+ul.feat b{display:block}
+ul.feat span{font-size:13.5px;color:var(--muted)}
+.btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.btn{border:1px solid var(--line);background:#fff;border-radius:10px;padding:8px 16px;font:inherit;font-weight:700;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+.btn.pri{color:#fff;border-color:transparent}
+.btn[aria-disabled="true"]{opacity:.55;cursor:default}
+.p1 .btn.pri{background:var(--blue)}.p2 .btn.pri{background:var(--ai)}.p3 .btn.pri{background:var(--fb)}
+.note{background:#fff8e6;border-radius:10px;padding:10px 14px;font-size:13.5px;margin-top:12px}
+.howto{display:none;border:1px dashed var(--line);border-radius:10px;padding:10px 14px;margin-top:12px;font-size:13.5px;background:#fafbfc}
+.howto.on{display:block}
+.howto ol{margin:4px 0 0;padding-left:20px}
+/* 흐름도 */
+.flow{display:flex;align-items:stretch;gap:6px;flex-wrap:wrap;margin:6px 0}
+.node{flex:1;min-width:110px;border:1px solid var(--line);border-radius:12px;padding:10px;text-align:center;background:#fafbfc}
+.node .e{font-size:24px}
+.node b{display:block;font-size:13.5px}
+.node small{font-size:12px;color:var(--muted)}
+.node.loc{border-color:#b9d3f0;background:var(--blues)}.node.gm{border-color:#cfc4f7;background:var(--ais)}.node.fb{border-color:#ffd59a;background:var(--fbs)}.node.gh{border-color:#d0d7de;background:#f6f8fa}
+.arr{align-self:center;color:var(--faint);font-size:20px}
+.zone{font-size:12px;font-weight:800;color:var(--faint);margin:10px 0 2px}
+/* 미리보기 */
+.mini{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fff}
+.mini .bar{background:#eef0f3;padding:6px 10px;font-size:12px;color:var(--muted);display:flex;gap:6px;align-items:center}
+.mini .bar i{width:9px;height:9px;border-radius:50%;display:inline-block;flex:none}
+.mini .bar .url{flex:1;min-width:0;background:#fff;border-radius:6px;padding:1px 8px;margin-left:6px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.mini .bd{padding:12px}
+.row{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-left:4px solid var(--k,#22658d);border-radius:8px;padding:6px 9px;margin-bottom:6px;font-size:13.5px}
+.row .d{font-weight:800;font-size:11.5px;border-radius:999px;padding:0 7px;background:#fdecec;color:var(--red);flex:none}
+.row .d.n{background:#f1f1ef;color:var(--muted)}
+.row b{flex:1;min-width:0}
+.row .ab{font:800 11px/18px sans-serif;border-radius:999px;padding:0 7px;flex:none}
+.ab.ai{background:var(--ais);color:var(--ai)}.ab.ok{background:var(--greens);color:var(--green)}
+.sum{font-size:12.5px;color:#3d2f86;background:var(--ais);border-radius:6px;padding:3px 8px;margin:-2px 0 6px 4px}
+.login{display:flex;flex-direction:column;align-items:center;gap:10px;padding:16px 8px;text-align:center}
+.gbtn{display:flex;align-items:center;gap:10px;border:1px solid #dadce0;border-radius:999px;padding:8px 18px;background:#fff;font:inherit;font-weight:700;cursor:pointer}
+.gbtn .g{font:800 18px/1 sans-serif;background:conic-gradient(#ea4335 0 25%,#fbbc05 0 50%,#34a853 0 75%,#4285f4 0);-webkit-background-clip:text;background-clip:text;color:transparent}
+.sw{display:inline-flex;align-items:center;gap:8px;font-size:13.5px;cursor:pointer;user-select:none}
+.sw i{width:38px;height:22px;border-radius:999px;background:#ccc;position:relative;transition:.2s;flex:none}
+.sw i::after{content:'';position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:.2s}
+.sw.on i{background:var(--fb)}.sw.on i::after{left:19px}
+.demo-badge{background:var(--fb);color:#fff;font:800 11px/20px sans-serif;border-radius:999px;padding:0 8px}
+.store{font-size:13px;border:1px dashed #ffc477;border-radius:10px;padding:8px 10px;background:#fffaf2;margin-top:8px;overflow-wrap:anywhere}
+.store code{background:#fff;border:1px solid var(--line);border-radius:4px;padding:0 4px;font-size:12px}
+.cap{font-size:12px;color:var(--faint);margin-top:6px}
+/* 비교표 */
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{padding:9px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{background:#f3f4f6;font-size:13px;color:var(--muted)}
+td.c1{color:var(--blue);font-weight:700}td.c2{color:var(--ai);font-weight:700}td.c3{color:var(--fb);font-weight:700}
+.tblwrap{overflow-x:auto}
+footer{text-align:center;font-size:12.5px;color:var(--faint);margin-top:22px}
+.toast{position:fixed;left:50%;bottom:18px;transform:translate(-50%,140%);opacity:0;background:#2b2a27;color:#fff;border-radius:10px;padding:9px 16px;font-size:14px;transition:.3s;z-index:9;pointer-events:none;max-width:calc(100% - 32px)}
+.toast.on{transform:translate(-50%,0);opacity:1}
+</style></head><body>
+<header class="hero"><div class="in">
+  <div class="logo" aria-hidden="true">📬</div>
+  <div><h1>올댓메시지</h1><p>쿨메신저·카톡 속 일정을 한곳에 — 선생님의 메시지 정리 도우미</p>
+    <div class="tagrow"><span class="tg">🏫 초등 교사용</span><span class="tg">📅 일정·마감 자동 정리</span><span class="tg">🤖 Gemini 다듬기</span><span class="tg">☁️ 웹·클라우드</span></div></div>
+</div></header>
+<div class="wrap">
+  <div class="tabs" role="tablist" aria-label="올댓메시지 3가지 판">
+    <button class="tab t1" data-t="1" role="tab" id="tab1" aria-controls="panel1"><div class="no">VERSION 1</div><div class="nm">⚙ 기본판 <span class="chip">AI 없음</span></div><div class="ds">규칙으로 정리 · 내 PC에만 저장 · 인터넷 연결 없음</div></button>
+    <button class="tab t2" data-t="2" role="tab" id="tab2" aria-controls="panel2"><div class="no">VERSION 2</div><div class="nm">🤖 AI판 <span class="chip">Gemini</span></div><div class="ds">기본판 결과를 Gemini가 검토·보정 · 내 PC에 저장</div></button>
+    <button class="tab t3" data-t="3" role="tab" id="tab3" aria-controls="panel3"><div class="no">VERSION 3</div><div class="nm">☁️ 웹판 <span class="chip">Firebase</span></div><div class="ds">AI판 + 웹 주소 + 구글 로그인 · 어디서나 보기</div></button>
+  </div>
+
+  <!-- ① 기본판 -->
+  <section class="panel p1" data-p="1" id="panel1" role="tabpanel" aria-labelledby="tab1">
+    <div class="grid">
+      <div class="card"><h2>⚙ 기본판 — 내 PC 안에서만</h2>
+        <p class="lead">쿨메신저 저장 파일(.xls)과 카톡 대화 내보내기(.txt)를 넣으면, <b>규칙</b>으로 날짜·마감·장소를 찾아 일정표·달력으로 정리해요. 메시지는 <b>밖으로 나가지 않아요.</b></p>
+        <ul class="feat">
+          <li><span class="i">📥</span><div><b>메시지 넣기</b><span>파일을 끌어다 놓거나 폴더를 연결하면 새 메시지를 자동으로 읽어요.</span></div></li>
+          <li><span class="i">📅</span><div><b>일정표 · 달력 · 할 일</b><span>오늘·이번 주·급한 마감, 월/주 달력, 끌어서 날짜 옮기기, 주간·월간 인쇄</span></div></li>
+          <li><span class="i">📬</span><div><b>알림판</b><span>작은 창에 급한 것·오늘·다음 일정까지 남은 시간 · 컴퓨터를 켜면 자동으로</span></div></li>
+          <li><span class="i">🔗</span><div><b>링크 · 📷 사진 표시</b><span>메시지 속 링크 모음, 사진이 함께 온 메시지 표시</span></div></li>
+        </ul>
+        <div class="btns"><button class="btn pri" data-how="h1" aria-expanded="false" aria-controls="h1">💻 PC에서 여는 방법</button><a class="btn" data-repo href="#">🐙 GitHub 저장소</a></div>
+        <div class="howto" id="h1">기본판은 웹 주소가 아니라 <b>PC의 파일</b>로 써요.
+          <ol><li>PC에 둔 <b>「올댓메시지.html」</b> 파일을 크롬으로 열어요.</li><li><b>+ 메시지 넣기</b>로 쿨메신저 저장 폴더나 카톡 내보내기 파일을 연결해요.</li><li>일정은 그 PC의 브라우저에만 저장돼요.</li></ol></div>
+      </div>
+      <div class="card"><h3 style="margin-top:0">데이터 흐름</h3>
+        <div class="zone">🔒 모두 내 PC 안</div>
+        <div class="flow"><div class="node loc"><div class="e">💬🐧</div><b>메시지 파일</b><small>카톡 .txt · 쿨메 .xls</small></div><div class="arr">→</div><div class="node loc"><div class="e">⚙</div><b>규칙으로 정리</b><small>날짜·마감·장소</small></div><div class="arr">→</div><div class="node loc"><div class="e">💾</div><b>브라우저 저장소</b><small>이 PC에만</small></div></div>
+        <h3>미리보기</h3>
+        <div class="mini"><div class="bar"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i><span class="url">file:///…/올댓메시지.html</span></div><div class="bd">
+          <div class="row" style="--k:#b4560b"><span class="d">D-2</span><b>현장체험학습 동의서 제출</b><small>교무실</small></div>
+          <div class="row" style="--k:#7b4c9c"><span class="d n">D-3</span><b>학년 협의회</b><small>15:30 · 연구실</small></div>
+          <div class="row" style="--k:#2e6b4b"><span class="d n">D-4</span><b>체육대회 리허설</b><small>3교시 · 운동장</small></div>
+        </div></div>
+        <div class="cap">그림 속 일정은 꾸며 낸 예시예요.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ② AI판 -->
+  <section class="panel p2" data-p="2" id="panel2" role="tabpanel" aria-labelledby="tab2">
+    <div class="grid">
+      <div class="card"><h2>🤖 AI판 — 기본판 + Gemini 다듬기</h2>
+        <p class="lead">기본판이 먼저 정리한 결과를 <b>Gemini가 원문과 비교해 검토·보정</b>하고, 앱이 두 결과를 합쳐요. 날짜가 다르면 선생님이 골라요.</p>
+        <ul class="feat">
+          <li><span class="i">📆</span><div><b>달력표로 날짜 확인</b><span>「다음 주 목요일」「22일(화)」을 달력표에서 골라 요일 실수를 줄여요.</span></div></li>
+          <li><span class="i">🧭</span><div><b>확정 · 미정 · 변경 · 취소 · 지난 일</b><span>「10일 혹은 17일」은 후보로, 「26일로 연기」는 날짜 변경으로 알려 줘요.</span></div></li>
+          <li><span class="i">🔍</span><div><b>앱이 다시 검사</b><span>근거 문장이 원문에 있는지, 요일이 맞는지 확인 · 지어낸 일정은 버려요.</span></div></li>
+          <li><span class="i">🔁</span><div><b>갈린 것만 Pro로 재확인 · 선생님 선택으로 배우기</b><span>고른 결과를 다음 질문의 예시로 보내요.</span></div></li>
+          <li><span class="i">🎯</span><div><b>정확도 점검</b><span>예문 20개로 기존·Gemini·합친 결과 점수를 비교해요.</span></div></li>
+        </ul>
+        <div class="btns"><button class="btn pri" data-how="h2" aria-expanded="false" aria-controls="h2">💻 PC에서 여는 방법</button><button class="btn" data-bench aria-expanded="false" aria-controls="benchBox">🎯 점검 결과 예시 보기</button></div>
+        <div class="howto" id="h2">AI판도 <b>PC의 파일</b>로 써요.
+          <ol><li>PC에 둔 <b>「올댓메시지_AI판.html」</b> 파일을 크롬으로 열어요. 파일 이름에 「AI판」이 있어야 Gemini 기능이 켜져요.</li><li>설정에서 <b>내 Gemini 키</b>를 넣어요. 키는 그 PC에만 저장돼요.</li><li>메시지를 넣으면 기본판 정리 → Gemini 검토 → 합치기 순서로 정리돼요.</li></ol></div>
+        <p class="note">🔐 Gemini 키는 이 PC에만 저장하고, 보낼 때 학생·학부모 이름과 전화번호를 ○○○로 가려요.</p>
+      </div>
+      <div class="card"><h3 style="margin-top:0">데이터 흐름</h3>
+        <div class="zone">🔒 내 PC</div>
+        <div class="flow"><div class="node loc"><div class="e">💬🐧</div><b>메시지 파일</b></div><div class="arr">→</div><div class="node loc"><div class="e">⚙</div><b>규칙 정리</b></div><div class="arr">→</div><div class="node loc"><div class="e">🤝</div><b>비교·합치기</b><small>⚠ 갈리면 선생님 확인</small></div></div>
+        <div class="zone">↕ 이름 가린 원문 + 기존 결과만</div>
+        <div class="flow"><div class="node gm"><div class="e">🤖</div><b>Gemini (Flash)</b><small>검토·보정</small></div><div class="node gm"><div class="e">🔁</div><b>Gemini (Pro)</b><small>갈린 것만 재확인</small></div></div>
+        <h3>미리보기</h3>
+        <div class="mini"><div class="bar"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i><span class="url">file:///…/올댓메시지_AI판.html</span></div><div class="bd">
+          <div class="row" style="--k:#b4560b"><span class="d">D-2</span><b>현장체험학습 동의서 제출</b><span class="ab ai">🤖 AI 보정</span></div>
+          <div class="sum">교무실로 동의서·미제출 명단을 종이로 제출</div>
+          <div class="row" style="--k:#7b4c9c"><span class="d n">D-3</span><b>학년 협의회</b><span class="ab ok">🤝 같음</span></div>
+          <div class="row" style="--k:#c2580a"><span class="d n">미정</span><b>야외 마실</b><span class="ab" style="background:#fff1e3;color:#c2580a">⏳ 11/10·11/17</span></div>
+        </div></div>
+        <div class="cap">그림 속 일정은 꾸며 낸 예시예요.</div>
+        <div id="benchBox" class="store" style="display:none;border-color:#cfc4f7;background:#faf8ff">🎯 점검 결과 (예시): ⚙ 기존 80% · 🤖 Gemini 90% · 🤝 합친 결과 <b>95%</b> — 실제 점수는 선생님 키로 「점검 시작」을 눌러야 나와요.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ③ 웹판 -->
+  <section class="panel p3" data-p="3" id="panel3" role="tabpanel" aria-labelledby="tab3">
+    <div class="grid">
+      <div class="card"><h2>☁️ 웹판 — AI판 + 웹 주소 + Firebase</h2>
+        <p class="lead">웹 주소로 어디서나 열고, <b>구글 로그인</b>한 본인만 볼 수 있어요. 클라우드에는 <b>일정·요약만</b> 저장하고, 메시지 원문은 올리지 않아요.</p>
+        <ul class="feat">
+          <li><span class="i">🌐</span><div><b>Firebase Hosting 주소</b><span>설치 없이 크롬에서 바로 열어요. (주소는 배포한 뒤 정해져요)</span></div></li>
+          <li><span class="i">🔑</span><div><b>구글 로그인 (Firebase Authentication)</b><span>로그인한 본인 일정만 읽고 쓸 수 있게 보안 규칙을 걸어요.</span></div></li>
+          <li><span class="i">🗂</span><div><b>Firestore에 일정·요약만</b><span>학교 메시지 원문은 PC에만 · 휴대폰·학교 PC에서 같은 일정 보기</span></div></li>
+          <li><span class="i">🐙</span><div><b>GitHub에 코드 공개</b><span>해커톤 제출용 저장소 · 키·개인정보는 코드에 넣지 않아요.</span></div></li>
+          <li><span class="i">🎬</span><div><b>데모 모드</b><span>발표 때는 꾸며 낸 예시 데이터로만 보여 줘요.</span></div></li>
+        </ul>
+        <div class="btns"><a class="btn pri" href="app.html">☁️ 웹판 열기</a><a class="btn" href="app.html?demo=1">🎬 데모로 보기</a><a class="btn" data-repo href="#">🐙 GitHub 저장소</a></div>
+        <p class="note">🔐 Gemini 키는 코드에 들어 있지 않아요. 쓰는 사람이 각자 브라우저에서 넣어요.</p>
+      </div>
+      <div class="card"><h3 style="margin-top:0">로그인 화면 (미리보기)</h3>
+        <div class="mini"><div class="bar"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i><span class="url" id="webUrl">https://(배포 주소).web.app</span></div><div class="bd" id="webBd"></div></div>
+        <div class="cap">눌러 볼 수 있는 그림이에요. 실제 로그인은 「웹판 열기」에서 해요.</div>
+        <h3>데이터 흐름</h3>
+        <div class="flow"><div class="node loc"><div class="e">💻</div><b>내 브라우저</b><small>파일 넣기 · 규칙 정리</small></div><div class="arr">→</div><div class="node gm"><div class="e">🤖</div><b>Gemini</b><small>내 키로 다듬기</small></div><div class="arr">→</div><div class="node fb"><div class="e">🔥</div><b>Firestore</b><small>일정·요약만</small></div></div>
+        <div class="flow"><div class="node gh"><div class="e">🐙</div><b>GitHub</b><small>코드 저장소</small></div><div class="arr">→</div><div class="node fb"><div class="e">🌐</div><b>Firebase Hosting</b><small>웹 주소로 배포</small></div></div>
+        <div class="store">🔥 Firestore에 저장되는 모양<br><code>users/{내 uid}/events/{id}</code> → 날짜 · 제목 · 한 줄 요약 · 분류 · 완료 여부<br><span style="color:#8a5a00">✕ 원문 · 보낸 사람 전화번호 · 학생 이름은 저장 안 함</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 비교표 -->
+  <div class="card" style="margin-top:18px"><h2>한눈에 비교</h2>
+    <div class="tblwrap"><table>
+      <tr><th></th><th>⚙ 기본판</th><th>🤖 AI판</th><th>☁️ 웹판</th></tr>
+      <tr><th>정리 방식</th><td>규칙</td><td>규칙 + Gemini 검토·보정</td><td>규칙 + Gemini 검토·보정</td></tr>
+      <tr><th>여는 방법</th><td>PC의 파일</td><td>PC의 파일</td><td>웹 주소 + 구글 로그인</td></tr>
+      <tr><th>저장 위치</th><td class="c1">내 PC 브라우저</td><td class="c2">내 PC 브라우저</td><td class="c3">Firestore (일정·요약만)</td></tr>
+      <tr><th>밖으로 나가는 것</th><td>없음</td><td>이름 가린 원문 → Gemini</td><td>이름 가린 원문 → Gemini · 일정·요약 → Firebase</td></tr>
+      <tr><th>여러 기기</th><td>✕</td><td>✕</td><td>○ (휴대폰·학교 PC)</td></tr>
+      <tr><th>추천 상황</th><td>개인정보가 가장 중요할 때</td><td>더 정확한 정리가 필요할 때</td><td>어디서나 보고 싶을 때 · 발표용</td></tr>
+    </table></div>
+  </div>
+  <footer>📬 올댓메시지 · 초등 교사용 메시지 정리 도우미 · 이 페이지의 예시 일정은 모두 꾸며 낸 내용이에요.</footer>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script>
+'use strict';
+/* GitHub 저장소 주소: 6단계에서 저장소를 만든 뒤 채워요. 비어 있으면 「준비 중」으로 보여요. */
+const REPO_URL = '';
+const TAB_PREF = 'allthat-start-tab';
+const $ = s => document.querySelector(s);
+const $$ = s => document.querySelectorAll(s);
+function toast(t) { const el = $('#toast'); el.textContent = t; el.classList.add('on'); clearTimeout(toast.h); toast.h = setTimeout(() => el.classList.remove('on'), 2400); }
+
+/* 탭: 주소 끝 #basic / #ai / #web 으로도 바로 열려요. 마지막으로 본 탭을 기억해요. */
+const HASH = { basic: '1', ai: '2', web: '3' };
+function showTab(n, remember) {
+  $$('.tab').forEach(b => { const on = b.dataset.t === n; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); b.tabIndex = on ? 0 : -1; });
+  $$('.panel').forEach(p => p.classList.toggle('on', p.dataset.p === n));
+  if (remember) { try { localStorage.setItem(TAB_PREF, n); } catch (e) {} }
+}
+function firstTab() {
+  const h = HASH[location.hash.slice(1)];
+  if (h) return h;
+  try { const s = localStorage.getItem(TAB_PREF); if (/^[123]$/.test(s)) return s; } catch (e) {}
+  return '3';   // 웹 주소로 들어온 분께는 웹판을 먼저 보여 줘요
+}
+
+/* GitHub 버튼 */
+$$('[data-repo]').forEach(a => {
+  if (REPO_URL) { a.href = REPO_URL; a.target = '_blank'; a.rel = 'noopener'; }
+  else { a.setAttribute('aria-disabled', 'true'); a.title = '저장소 준비 중'; }
+});
+
+/* 웹판 로그인 화면 미리보기 (그림일 뿐, 실제 로그인은 하지 않아요) */
+let logged = false, demo = true;
+function renderWeb() {
+  $('#webBd').innerHTML = !logged
+    ? `<div class="login"><div style="font-size:34px">📬</div><b style="font-family:Jua,sans-serif;font-size:20px">올댓메시지 웹판</b><span style="font-size:13px;color:#5b6270">로그인한 본인 일정만 보여요</span>
+        <button class="gbtn" id="glogin" type="button"><span class="g">G</span> Google 계정으로 로그인</button>
+        <span class="sw${demo ? ' on' : ''}" id="demoSw" role="switch" aria-checked="${demo}" tabindex="0"><i></i> 🎬 데모 모드 (예시 데이터로 보기)</span></div>`
+    : `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><b>${demo ? '데모 선생님' : '내 일정'}</b>${demo ? '<span class="demo-badge">DEMO</span>' : ''}<span style="flex:1"></span><button class="btn" style="padding:3px 10px;font-size:12.5px" id="logout" type="button">로그아웃</button></div>
+       <div class="row" style="--k:#b4560b"><span class="d">D-2</span><b>현장체험학습 동의서 제출</b><span class="ab ai">🤖</span></div>
+       <div class="row" style="--k:#7b4c9c"><span class="d n">D-3</span><b>학년 협의회</b><span class="ab ok">🤝</span></div>
+       <div style="font-size:12px;color:#8b919c">☁️ Firestore와 동기화 · 휴대폰에서도 같은 일정</div>`;
+}
+
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-t]'); if (t) { showTab(t.dataset.t, true); return; }
+  const h = e.target.closest('[data-how]'); if (h) { const box = document.getElementById(h.dataset.how); const on = box.classList.toggle('on'); h.setAttribute('aria-expanded', on); return; }
+  const r = e.target.closest('[data-repo]'); if (r && !REPO_URL) { e.preventDefault(); toast('GitHub 저장소는 준비 중이에요.'); return; }
+  const b = e.target.closest('[data-bench]'); if (b) { const box = $('#benchBox'); const on = box.style.display === 'none'; box.style.display = on ? '' : 'none'; b.setAttribute('aria-expanded', on); return; }
+  if (e.target.closest('#glogin')) { logged = true; renderWeb(); toast(demo ? '미리보기: 데모 모드 화면이에요. (예시 데이터)' : '미리보기: 로그인한 뒤 화면이에요.'); return; }
+  if (e.target.closest('#logout')) { logged = false; renderWeb(); return; }
+  if (e.target.closest('#demoSw')) { demo = !demo; renderWeb(); }
+});
+document.addEventListener('keydown', e => {
+  if (e.target.id === 'demoSw' && (e.key === ' ' || e.key === 'Enter')) { e.preventDefault(); demo = !demo; renderWeb(); $('#demoSw').focus(); return; }
+  const t = e.target.closest('.tab'); if (!t || !['ArrowLeft', 'ArrowRight'].includes(e.key)) return;
+  const n = ((+t.dataset.t - 1 + (e.key === 'ArrowRight' ? 1 : 2)) % 3) + 1;
+  showTab(String(n), true); document.getElementById('tab' + n).focus();
+});
+window.addEventListener('hashchange', () => { const h = HASH[location.hash.slice(1)]; if (h) showTab(h, false); });
+if (location.protocol.startsWith('http') && !/localhost|127\.0\.0\.1/.test(location.hostname)) $('#webUrl').textContent = location.origin;
+showTab(firstTab(), false);
+renderWeb();
+</script>
+</body></html>

@@ -1,0 +1,42 @@
+rules_version = '2';
+
+// 올댓메시지 웹판 보안 규칙
+// - 로그인한 본인만 자기 칸(users/{내 uid}/events) 아래를 읽고 쓸 수 있어요.
+// - 일정 한 개에는 정해진 칸(날짜·제목·한 줄 요약 등)만 넣을 수 있고, 글자 길이도 제한해요.
+//   → 실수로 메시지 원문 같은 긴 글이나 다른 칸이 올라가는 것을 서버에서도 막아요.
+// - 그 밖의 모든 곳(예: 예전 classBoard 데이터)은 아무도 읽고 쓸 수 없어요. (2026-09-17 시험 규칙이 끝난 뒤와 같음)
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    function str(v, n) {
+      return v is string && v.size() <= n;
+    }
+
+    function validEvent(d) {
+      return d.keys().hasOnly(['date', 'endDate', 'time', 'period', 'title', 'summary', 'place',
+                               'category', 'deadline', 'done', 'todos', 'updatedAt'])
+        && d.keys().hasAll(['date', 'title'])
+        && str(d.date, 10) && d.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && str(d.title, 80)
+        && (!('endDate' in d) || str(d.endDate, 10))
+        && (!('time' in d) || str(d.time, 5))
+        && (!('period' in d) || str(d.period, 20))
+        && (!('summary' in d) || str(d.summary, 120))
+        && (!('place' in d) || str(d.place, 40))
+        && (!('category' in d) || d.category in ['제출·마감', '회의·연수', '행사·학사', '일정'])
+        && (!('deadline' in d) || d.deadline is bool)
+        && (!('done' in d) || d.done is bool)
+        && (!('todos' in d) || (d.todos is list && d.todos.size() <= 20))
+        && (!('updatedAt' in d) || d.updatedAt is timestamp);
+    }
+
+    match /users/{uid}/events/{eventId} {
+      allow read, delete: if isOwner(uid);
+      allow create, update: if isOwner(uid) && validEvent(request.resource.data);
+    }
+  }
+}
