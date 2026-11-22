@@ -6162,11 +6162,11 @@ function bdBell() {
 if (BOARD) {
   document.body.classList.add('board-mode');
   document.title = '올댓메시지 알림판';
-  // 처음 한 번: 카톡 창 크기(420×720)로 화면 오른쪽 아래에 (그 뒤 선생님이 바꾼 크기·위치는 크롬이 기억)
-  if (!getPref().boardSized) {
-    // 크롬이 예전 창 위치를 먼저 되살리므로 조금 기다렸다가 맞춤
-    const fit = () => { try { const W = 420, H = 720, s = window.screen; window.resizeTo(W, H); window.moveTo((s.availLeft || 0) + s.availWidth - W - 12, (s.availTop || 0) + s.availHeight - H - 12); } catch (e) {} };
-    fit(); setTimeout(fit, 500); setTimeout(fit, 1500);
+  // 열 때마다: 카톡 창 크기(420×720)로 화면 오른쪽 아래에 (☁️ 웹판: 크롬이 예전 큰 크기를 기억해도 항상 카톡 크기로)
+  {
+    // 크롬이 예전 창 크기·위치를 먼저 되살리므로 조금씩 기다렸다가 여러 번 맞춤
+    const fit = () => { try { const W = 420, H = Math.min(720, (window.screen.availHeight || 760) - 24), s = window.screen; window.resizeTo(W, H); window.moveTo((s.availLeft || 0) + s.availWidth - W - 12, (s.availTop || 0) + s.availHeight - H - 12); } catch (e) {} };
+    fit(); setTimeout(fit, 300); setTimeout(fit, 900); setTimeout(fit, 2000);
     setPref({ boardSized: 1 });
   }
   // 처음 한 번: 추천 알림 설정 (아침 8:20 요약 · 16:30 내일 준비 · 일정 30분 전 · 마감 전날부터)
