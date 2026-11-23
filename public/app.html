@@ -1667,6 +1667,8 @@ body.board-mode #nBanner{left:8px;right:8px;width:auto;bottom:8px}
 /* ===================== 저장소 ===================== */
 // ☁️ 웹판: PC 파일로 여는 기본판·AI판과 저장 공간을 나눠요 (같은 PC에서 열어도 서로 섞이지 않게)
 const WEB_BUILD = true;
+// 웹판 버전: 고쳐서 배포할 때마다 바꿈 → 오래 열어 둔 창(알림판 등)이 새 버전을 알아채고 저절로 새로고침
+const BUILD = '2026-11-23b';
 const KEY = 'allthat-web-v1';
 const PREF = 'allthat-web-pref';
 let state = { messages: [], events: [] };
@@ -3298,6 +3300,12 @@ function markGone(evs) {
     if (e.date && e.title) state.gone[titleKey(e.date, e.title)] = now;
     if (e.date && e.aiOld) state.gone[titleKey(e.date, e.aiOld)] = now;
   });
+}
+// 교시 칸 고치기: 예전 이름 가리기 규칙이 「1-2교시」를 「1-2○○○」로 바꾼 것을 되돌림 (교시 칸에는 이름이 들어가지 않음)
+function healPeriod(e) {
+  if (!e || !e.period || !e.period.includes('○○○')) return false;
+  const p = e.period.replace(/(\d)\s*○○○/g, '$1교시').replace(/○○○/g, '');
+  if (p === e.period) return false; e.period = p.trim(); return true;
 }
 // 새로 찾은 일정이 이미 있거나(dup) 지운 것(gone)인지
 function knownOf(e, fp) {
@@ -5554,6 +5562,7 @@ load();
 })();
 (() => { let ch = 0; state.messages.forEach(m => { if (NO_TITLE.test(m.subject || '')) { const t = contentTitle(m.body); if (t && t !== '(제목 없음)') { m.subject = t; ch++; } } }); if (ch) save(); })();
 if (!DEMO && !BOARD) { try { if (backfillRk()) save(); } catch (e) {} }   // 🧾 예전 일정에도 꼬리표 붙이기
+if (!DEMO) { try { let n = 0; state.events.forEach(e => { if (healPeriod(e)) n++; }); if (n) save(); } catch (e) {} }   // 「1-2○○○」 → 「1-2교시」
 // (한 번만) 예전에 들어간 학사일정을 모두 지우고, 앞으로는 선생님이 올린 파일에서만 학사일정을 가져옴
 let acadResetSnap = null;
 if (!getPref().acadReset1) {
@@ -6261,6 +6270,21 @@ function bdSetDone(ids, on) {
   toast(ids.length > 1 ? `${ids.length}개를 완료했어요.` : '완료했어요.', '되돌리기', () => { restoreSnap(snap); });
   setTimeout(() => { ids.forEach(id => { const el = document.querySelector(`[data-bdit="${id}"]`); if (el && state.events.find(x => x.id === id && x.done)) el.classList.add('gone'); }); setTimeout(() => { ids.forEach(id => bdDoneShow.delete(id)); render(); }, 400); }, 3000);
 }
+// 🔄 새 버전 확인: 20분마다(그리고 창을 다시 볼 때) 웹 주소의 app.html 버전을 보고, 바뀌었으면 저절로 새로고침
+//    (입력 중이거나 창이 열려 있으면 기다렸다가) — 예전 코드가 남은 창이 일정을 잘못 올리는 일을 막음
+async function checkNewBuild() {
+  if (!/^https?:/.test(location.protocol) || /localhost|127\.0\.0\.1/.test(location.hostname)) return;
+  try {
+    const t = await (await fetch('app.html?build=' + Date.now(), { cache: 'no-store' })).text();
+    const m = t.match(/const BUILD = '([^']+)'/);
+    if (!m || m[1] === BUILD) return;
+    const busy = () => { const a = document.activeElement; return (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) || document.querySelector('dialog[open], details.pop[open]') || (typeof aiRunning !== 'undefined' && aiRunning); };
+    const go = () => { if (busy()) return setTimeout(go, 60000); location.reload(); };
+    go();
+  } catch (e) {}
+}
+setInterval(checkNewBuild, 20 * 60 * 1000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) checkNewBuild(); });
 // 📬 웹판: 큰 화면의 「알림판」 버튼 → 작은 창(420×720)으로 화면 오른쪽 아래에 열기
 function openBoard() {
   const W = 420, H = 720, s = window.screen;
@@ -6435,13 +6459,24 @@ window.allthatBridge = {
   resetLocal() { state = { messages: [], events: [] }; save(); render(); },
   applyRemote({ adds, updates, removes }) {
     // 클라우드 글자는 이름이 ○○○로 가려져 있어요 → 이 브라우저의 원래 글자를 가린 것과 같으면 원래 글자를 그대로 둬요
-    const keep = (local, remote) => { if (!local || !remote) return remote; const m = aiMask(local).replace(/\s+/g, ' ').trim(); return m === remote || (m.startsWith(remote) && remote.length >= 20) ? local : remote; };
+    // ○○○ 자리를 「아무 글자 1~4자」로 보고 원래 글자와 맞으면 원래 글자를 둠 (예전 규칙으로 가린 「1-2○○○」도 「1-2교시」를 덮지 않게)
+    const keep = (local, remote) => {
+      if (!local || !remote) return remote;
+      const m = aiMask(local).replace(/\s+/g, ' ').trim();
+      if (m === remote || (m.startsWith(remote) && remote.length >= 20)) return local;
+      if (remote.includes('○○○') && !local.includes('○○○')) {
+        const re = new RegExp('^' + remote.split('○○○').map(p => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s*')).join('[^\\s,·/]{1,6}') + (remote.length >= 20 ? '' : '$'));
+        if (re.test(local.replace(/\s+/g, ' ').trim())) return local;
+      }
+      return remote;
+    };
     const put = (e, d) => {
       const oldTodos = Array.isArray(e.todos) ? e.todos.map(t => typeof t === 'string' ? t : t.t) : [];
       Object.assign(e, { date: d.date, endDate: d.endDate || '', time: d.time || '', period: keep(e.period, d.period || ''), title: keep(e.title, d.title || '(제목 없음)'), place: keep(e.place, d.place || ''), category: d.category || '일정', deadline: !!d.deadline, done: !!d.done,
         todos: Array.isArray(d.todos) ? d.todos.map((t, i) => ({ t: keep(oldTodos[i], t.t), done: !!t.done })) : [] });
       if (d.summary) e.aiSum = keep(e.aiSum, d.summary); else delete e.aiSum;
       if (d.rk && !e.rk) e.rk = d.rk;
+      healPeriod(e);
     };
     adds.forEach(d => { if (!d.date) return; const e = { id: d.id, msgId: null, addedAt: Date.now(), src: '', fromCloud: true }; put(e, d); state.events.push(e); });
     updates.forEach(d => { const e = state.events.find(x => String(x.id) === d.id); if (e) put(e, d); });
@@ -6467,7 +6502,7 @@ document.getElementById('cloudBtn').addEventListener('click', async () => {
   await C.signOut(clear); toast(clear ? '로그아웃하고 이 브라우저의 내용을 지웠어요.' : '로그아웃했어요.');
 });
 </script>
-<script src="firebase-config.js"></script>
-<script type="module" src="cloud.js"></script>
+<script src="firebase-config.js?v=2026-11-23b"></script>
+<script type="module" src="cloud.js?v=2026-11-23b"></script>
 </body>
 </html>

@@ -16,7 +16,8 @@ export function cloudDoc(e) {
   return {
     date: okDate(e.date), endDate: okDate(e.endDate),
     time: /^\d{1,2}:\d{2}$/.test(e.time || '') ? e.time : '',
-    period: String(e.period || '').replace(/\s+/g, ' ').trim().slice(0, 20), title: txt(e.title, 80), summary: txt(e.aiSum, 120), place: txt(e.place, 40),
+    // 교시 칸은 이름이 들어가지 않아 가리지 않음 (예전 규칙이 「1-2교시」를 「1-2○○○」로 바꾼 것도 되돌려 올림)
+    period: String(e.period || '').replace(/(\d)\s*○○○/g, '$1교시').replace(/\s+/g, ' ').trim().slice(0, 20), title: txt(e.title, 80), summary: txt(e.aiSum, 120), place: txt(e.place, 40),
     category: ['제출·마감', '회의·연수', '행사·학사', '일정'].includes(e.category) ? e.category : '일정',
     deadline: !!e.deadline, done: !!e.done,
     rk: /^e[0-9a-z]{1,20}$/.test(e.rk || '') ? e.rk : '',   // 🧾 일정 꼬리표(암호 글자) — 다른 기기에서 같은 메시지를 넣어도 알아보게
