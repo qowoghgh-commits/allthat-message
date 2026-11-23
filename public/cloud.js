@@ -21,14 +21,15 @@ export function cloudDoc(e) {
     category: ['제출·마감', '회의·연수', '행사·학사', '일정'].includes(e.category) ? e.category : '일정',
     deadline: !!e.deadline, done: !!e.done,
     rk: /^e[0-9a-z]{1,20}$/.test(e.rk || '') ? e.rk : '',   // 🧾 일정 꼬리표(암호 글자) — 다른 기기에서 같은 메시지를 넣어도 알아보게
+    sk: /^s[0-9a-z]{1,20}$/.test(e.sk || '') ? e.sk : '',   // 🧾 문장 꼬리표(암호 글자) — 학교·집 파일이 조금 달라도, 직접 고쳐도 알아보게
     todos: (Array.isArray(e.todos) ? e.todos : []).slice(0, 20).map(t => ({ t: txt(typeof t === 'string' ? t : t.t, 80), done: !!(t && t.done) })),
   };
 }
-const FIELDS = ['date', 'endDate', 'time', 'period', 'title', 'summary', 'place', 'category', 'deadline', 'done', 'todos', 'rk'];
+const FIELDS = ['date', 'endDate', 'time', 'period', 'title', 'summary', 'place', 'category', 'deadline', 'done', 'todos', 'rk', 'sk'];
 const pick = d => Object.fromEntries(FIELDS.map(k => [k, d[k]]));
 const print = d => JSON.stringify(FIELDS.map(k => d[k] === undefined ? null : d[k]));
 // 🧾 지운 일정 기록: 올린 것 기억 (암호 글자만 · m/e/t + 숫자·영문)
-const GONE_OK = /^[emt][0-9a-z]{1,20}$/;
+const GONE_OK = /^[emts][0-9a-z]{1,20}$/;
 const GONEK = uid => 'allthat-web-gone:' + uid;
 const loadGone = uid => { try { return JSON.parse(localStorage.getItem(GONEK(uid))) || {}; } catch (e) { return {}; } };
 const saveGone = (uid, m) => { try { localStorage.setItem(GONEK(uid), JSON.stringify(m)); } catch (e) {} };

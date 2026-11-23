@@ -1668,7 +1668,7 @@ body.board-mode #nBanner{left:8px;right:8px;width:auto;bottom:8px}
 // ☁️ 웹판: PC 파일로 여는 기본판·AI판과 저장 공간을 나눠요 (같은 PC에서 열어도 서로 섞이지 않게)
 const WEB_BUILD = true;
 // 웹판 버전: 고쳐서 배포할 때마다 바꿈 → 오래 열어 둔 창(알림판 등)이 새 버전을 알아채고 저절로 새로고침
-const BUILD = '2026-11-23b';
+const BUILD = '2026-11-23c';
 const KEY = 'allthat-web-v1';
 const PREF = 'allthat-web-pref';
 let state = { messages: [], events: [] };
@@ -3292,11 +3292,15 @@ const normK = s => String(s || '').replace(/\s+/g, '').toLowerCase();
 const msgFp = m => m.fp || (m.fp = 'm' + hashKey(['m', m.source || '', m.received || '', m.sender || '', normK(m.body).slice(0, 300)].join('|')));
 const evRk = (fp, date, srcOrTitle) => 'e' + hashKey(['e', fp, date, normK(srcOrTitle).slice(0, 120)].join('|'));
 const titleKey = (date, title) => 't' + hashKey(['t', date, normK(title)].join('|'));
+// 문장 꼬리표(sk): 받은 날 + 근거 문장만 → 학교·집에서 따로 내보낸 파일(방 이름·보낸 사람 표기가 달라도), 날짜·제목을 직접 고쳐도 같은 일정으로 알아봄
+const sentKey = (received, src) => { const s = normK(src); return s.length >= 6 ? 's' + hashKey(['s', received || '', s.slice(0, 160)].join('|')) : ''; };
 // 지운(또는 「일정 아님」으로 뺀) 일정 기록 → 다음에 같은 일정이 나와도 넣지 않음
 function markGone(evs) {
   state.gone = state.gone || {}; const now = Date.now();
   (evs || []).forEach(e => { if (!e) return;
     if (e.rk) state.gone[e.rk] = now;
+    if (e.sk) state.gone[e.sk] = now;
+    if (e.origDate && e.origTitle) state.gone[titleKey(e.origDate, e.origTitle)] = now;
     if (e.date && e.title) state.gone[titleKey(e.date, e.title)] = now;
     if (e.date && e.aiOld) state.gone[titleKey(e.date, e.aiOld)] = now;
   });
@@ -3308,22 +3312,27 @@ function healPeriod(e) {
   if (p === e.period) return false; e.period = p.trim(); return true;
 }
 // 새로 찾은 일정이 이미 있거나(dup) 지운 것(gone)인지
-function knownOf(e, fp) {
-  const t = (e.title || '').trim(), rk = fp ? evRk(fp, e.date, e.src || t) : '', g = state.gone || {};
-  if ((rk && g[rk]) || g[titleKey(e.date, t)]) return { kind: 'gone', rk };
-  const same = state.events.find(x => (rk && x.rk === rk) || (x.date === e.date && (x.title === t || x.aiOld === t || (x.alts || []).some(a => a.t === t))));
-  return same ? { kind: 'dup', rk, same } : { kind: '', rk };
+function knownOf(e, fp, received) {
+  const t = (e.title || '').trim(), rk = fp ? evRk(fp, e.date, e.src || t) : '', sk = sentKey(received, e.src || ''), g = state.gone || {};
+  if ((rk && g[rk]) || (sk && g[sk]) || g[titleKey(e.date, t)]) return { kind: 'gone', rk, sk };
+  const same = state.events.find(x => (rk && x.rk === rk) || (sk && x.sk === sk)
+    || (x.origTitle === t && x.origDate === e.date)   // 선생님이 직접 고친 일정의 원래 모습
+    || (x.date === e.date && (x.title === t || x.aiOld === t || (x.alts || []).some(a => a.t === t))));
+  return same ? { kind: 'dup', rk, sk, same } : { kind: '', rk, sk };
 }
 // 미리보기·저장 전에: 이미 있는 일정·지운 일정은 저장하지 않게 표시
 function markKnownDrafts(list) {
   (list || []).forEach(d => { const fp = msgFp({ source: d.source || '', received: d.received, sender: d.sender, body: d.body });
-    (d.events || []).forEach(e => { if (!e.date || e.knownChecked) return; const k = knownOf(e, fp); e.knownChecked = 1;
+    (d.events || []).forEach(e => { if (!e.date || e.knownChecked) return; const k = knownOf(e, fp, d.received); e.knownChecked = 1;
       if (k.kind === 'gone') { e.keep = false; e.knownNote = '지운 일정이라 넣지 않아요'; }
       else if (k.kind === 'dup') { e.keep = false; e.knownNote = '이미 있는 일정이에요'; } }); });
 }
 // 예전 일정에도 꼬리표 붙이기 (메시지가 남아 있는 일정만)
 function backfillRk() {
-  let n = 0; state.events.forEach(e => { if (e.rk || !e.msgId || !e.src) return; const m = state.messages.find(x => x.id === e.msgId); if (!m) return; e.rk = evRk(msgFp(m), e.date, e.src); n++; });
+  let n = 0; state.events.forEach(e => { if ((e.rk && e.sk) || !e.msgId || !e.src) return; const m = state.messages.find(x => x.id === e.msgId); if (!m) return;
+    if (!e.rk) e.rk = evRk(msgFp(m), e.date, e.src);
+    if (!e.sk) { const s = sentKey(m.received, e.src); if (s) e.sk = s; }
+    n++; });
   return n;
 }
 
@@ -3392,7 +3401,7 @@ function saveDrafts(auto) {
     const oldMsg = state.messages.find(x => msgFp(x) === fp);   // 같은 메시지를 예전에 넣었음
     const dated = d.events.filter(e => e.date && e.title.trim());
     // 자동 저장에서 「지운 일정」은 묻지 않고 건너뜀, 「이미 있는 일정」은 할 일만 합치고 출처를 이어 줌
-    const known = dated.map(e => ({ e, k: knownOf(e, fp) }));
+    const known = dated.map(e => ({ e, k: knownOf(e, fp, d.received) }));
     const keepEvs = known.filter(x => x.e.keep && (!auto || !x.k.kind)).map(x => x.e);
     known.forEach(x => { if (x.k.kind === 'gone') goneN++; });
     const dups = known.filter(x => x.k.kind === 'dup');
@@ -3403,7 +3412,7 @@ function saveDrafts(auto) {
         const host = oldMsg || msg;
         if (!oldMsg && dups.some(x => !x.k.same.msgId)) { state.messages.push(msg); batch.msgIds.push(msg.id); mcnt++; }
         dups.forEach(x => { mergeTodos(x.k.same, x.e); if (!x.k.same.msgId && state.messages.includes(host)) { x.k.same.msgId = host.id; delete x.k.same.fromCloud; if (!x.k.same.src && x.e.src) x.k.same.src = x.e.src.slice(0, 300); }
-          if (!x.k.same.rk && x.k.rk) x.k.same.rk = x.k.rk; });
+          if (!x.k.same.rk && x.k.rk) x.k.same.rk = x.k.rk; if (!x.k.same.sk && x.k.sk) x.k.same.sk = x.k.sk; });
         // 이미 Gemini가 다듬은 일정에 이어진 메시지는 다시 다듬지 않음
         if (state.messages.includes(host) && dups.every(x => x.k.same.aiBy)) { state.aiDone = state.aiDone || {}; state.aiDone[host.id] = Date.now(); }
       }
@@ -3415,14 +3424,15 @@ function saveDrafts(auto) {
       state.messages.push(msg); batch.msgIds.push(msg.id); mcnt++;
       if (!/^(?:쿨메신저|카톡)/.test(msg.source)) collectLinks(msg.body, { src: srcOfMsg(msg) || 'me', source: msg.source, sender: msg.sender, date: msg.received, time: '', title: msg.subject });   // 붙여 넣은 메시지
     }
-    dups.forEach(x => { mergeTodos(x.k.same, x.e); if (!x.k.same.msgId) { x.k.same.msgId = host.id; delete x.k.same.fromCloud; } if (!x.k.same.rk && x.k.rk) x.k.same.rk = x.k.rk; });
+    dups.forEach(x => { mergeTodos(x.k.same, x.e); if (!x.k.same.msgId) { x.k.same.msgId = host.id; delete x.k.same.fromCloud; } if (!x.k.same.rk && x.k.rk) x.k.same.rk = x.k.rk; if (!x.k.same.sk && x.k.sk) x.k.same.sk = x.k.sk; });
     keepEvs.forEach(e => {
       if (e.autoTitle && e.title.trim() !== e.autoTitle && e.src) learnTitle(e.src, e.title);   // 확인 화면에서 고친 제목 기억
       // 같은 날짜·같은 제목 일정이 이미 있으면 (예: 안내 → 재안내) 할 일만 합치고 새로 만들지 않음
       const same = state.events.find(x => x.date === e.date && x.title === e.title.trim());
       if (same) { mergeTodos(same, e); return; }
       const id = uid();
-      state.events.push({ id, msgId: host.id, rk: evRk(fp, e.date, e.src || e.title.trim()), title: e.title.trim(), todos: (e.todos || []).map(t => ({ t, done: false })), date: e.date, endDate: e.endDate || '', time: e.time || '', period: e.period || '', place: e.place || '', category: e.category, deadline: !!e.deadline, done: false, addedAt: Date.now(), src: (e.src || '').slice(0, 300), ...(e.alts && e.alts.length ? { alts: e.alts.filter(a => a.t !== e.title.trim()).slice(0, 3) } : {}) });
+      const sk0 = sentKey(d.received, e.src || '');
+      state.events.push({ id, msgId: host.id, rk: evRk(fp, e.date, e.src || e.title.trim()), ...(sk0 ? { sk: sk0 } : {}), origTitle: e.title.trim(), origDate: e.date, title: e.title.trim(), todos: (e.todos || []).map(t => ({ t, done: false })), date: e.date, endDate: e.endDate || '', time: e.time || '', period: e.period || '', place: e.place || '', category: e.category, deadline: !!e.deadline, done: false, addedAt: Date.now(), src: (e.src || '').slice(0, 300), ...(e.alts && e.alts.length ? { alts: e.alts.filter(a => a.t !== e.title.trim()).slice(0, 3) } : {}) });
       batch.evIds.push(id); cats[e.category] = (cats[e.category] || 0) + 1; cnt++;
     });
   });
@@ -5952,7 +5962,7 @@ function aiPick(rid, how) {
   const ibItem = String(r.src).startsWith('ib:') ? (state.inbox || []).find(x => 'ib:' + x.id === r.src) : null;
   const via = String(r.src).startsWith('ib:') ? { src: ibItem ? ibItem.src : '', source: ibItem ? (ibItem.source || '') : '', sender: ibItem ? (ibItem.sender || '') : '', date: ibItem ? (ibItem.date || '') : '' } : null;
   const srcMsg = String(r.src).startsWith('ib:') ? null : state.messages.find(m => m.id === r.src);
-  const newEv = date => ({ ...(via ? { via } : {}), ...(srcMsg ? { rk: evRk(msgFp(srcMsg), date, a.evidence || a.title || '') } : {}), id: uid(), msgId: String(r.src).startsWith('ib:') ? null : r.src, title: (aiGoodTitle(a.title) ? a.title : (a.title || '새 일정')).trim().slice(0, 40), todos: [], date, endDate: a.end && a.end > date ? a.end : '', time: a.time || '', period: a.period || '', place: '', category: ['제출·마감', '회의·연수', '행사·학사', '일정'].includes(a.category) ? a.category : '일정', deadline: !!a.deadline, done: false, addedAt: Date.now(), src: (a.evidence || '').slice(0, 300), aiSum: (a.summary || '').slice(0, 60), aiBy: 'ai' });
+  const newEv = date => ({ ...(via ? { via } : {}), ...(srcMsg ? { rk: evRk(msgFp(srcMsg), date, a.evidence || a.title || ''), ...(sentKey(srcMsg.received, a.evidence || '') ? { sk: sentKey(srcMsg.received, a.evidence || '') } : {}) } : {}), id: uid(), msgId: String(r.src).startsWith('ib:') ? null : r.src, title: (aiGoodTitle(a.title) ? a.title : (a.title || '새 일정')).trim().slice(0, 40), todos: [], date, endDate: a.end && a.end > date ? a.end : '', time: a.time || '', period: a.period || '', place: '', category: ['제출·마감', '회의·연수', '행사·학사', '일정'].includes(a.category) ? a.category : '일정', deadline: !!a.deadline, done: false, addedAt: Date.now(), src: (a.evidence || '').slice(0, 300), aiSum: (a.summary || '').slice(0, 60), aiBy: 'ai' });
   const cand = String(how).startsWith('c:') ? how.slice(2) : '', ruleWas = e ? `${e.date} ${e.title}`.slice(0, 40) : '';
   if (cand) { if (e) { e.date = cand; e.aiBy = 'ai'; if (a.summary) e.aiSum = a.summary.trim().slice(0, 60); } else state.events.push(newEv(cand)); }
   else if (how === 'g') {
@@ -6476,6 +6486,7 @@ window.allthatBridge = {
         todos: Array.isArray(d.todos) ? d.todos.map((t, i) => ({ t: keep(oldTodos[i], t.t), done: !!t.done })) : [] });
       if (d.summary) e.aiSum = keep(e.aiSum, d.summary); else delete e.aiSum;
       if (d.rk && !e.rk) e.rk = d.rk;
+      if (d.sk && !e.sk) e.sk = d.sk;
       healPeriod(e);
     };
     adds.forEach(d => { if (!d.date) return; const e = { id: d.id, msgId: null, addedAt: Date.now(), src: '', fromCloud: true }; put(e, d); state.events.push(e); });
@@ -6502,7 +6513,7 @@ document.getElementById('cloudBtn').addEventListener('click', async () => {
   await C.signOut(clear); toast(clear ? '로그아웃하고 이 브라우저의 내용을 지웠어요.' : '로그아웃했어요.');
 });
 </script>
-<script src="firebase-config.js?v=2026-11-23b"></script>
-<script type="module" src="cloud.js?v=2026-11-23b"></script>
+<script src="firebase-config.js?v=2026-11-23c"></script>
+<script type="module" src="cloud.js?v=2026-11-23c"></script>
 </body>
 </html>
