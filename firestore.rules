@@ -18,7 +18,8 @@ service cloud.firestore {
 
     function validEvent(d) {
       return d.keys().hasOnly(['date', 'endDate', 'time', 'period', 'title', 'summary', 'place',
-                               'category', 'deadline', 'done', 'todos', 'updatedAt'])
+                               'category', 'deadline', 'done', 'todos', 'rk', 'updatedAt'])
+        && (!('rk' in d) || str(d.rk, 24))
         && d.keys().hasAll(['date', 'title'])
         && str(d.date, 10) && d.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
         && str(d.title, 80)
@@ -37,6 +38,13 @@ service cloud.firestore {
     match /users/{uid}/events/{eventId} {
       allow read, delete: if isOwner(uid);
       allow create, update: if isOwner(uid) && validEvent(request.resource.data);
+    }
+
+    // 🧾 지운 일정 기록: 문서 이름이 암호 글자(지문)이고, 안에는 시각(at) 하나만
+    match /users/{uid}/gone/{goneId} {
+      allow read, delete: if isOwner(uid);
+      allow create, update: if isOwner(uid) && goneId.size() <= 24
+        && request.resource.data.keys().hasOnly(['at']) && request.resource.data.at is timestamp;
     }
   }
 }

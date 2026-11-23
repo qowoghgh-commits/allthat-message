@@ -19,12 +19,18 @@ export function cloudDoc(e) {
     period: String(e.period || '').replace(/\s+/g, ' ').trim().slice(0, 20), title: txt(e.title, 80), summary: txt(e.aiSum, 120), place: txt(e.place, 40),
     category: ['제출·마감', '회의·연수', '행사·학사', '일정'].includes(e.category) ? e.category : '일정',
     deadline: !!e.deadline, done: !!e.done,
+    rk: /^e[0-9a-z]{1,20}$/.test(e.rk || '') ? e.rk : '',   // 🧾 일정 꼬리표(암호 글자) — 다른 기기에서 같은 메시지를 넣어도 알아보게
     todos: (Array.isArray(e.todos) ? e.todos : []).slice(0, 20).map(t => ({ t: txt(typeof t === 'string' ? t : t.t, 80), done: !!(t && t.done) })),
   };
 }
-const FIELDS = ['date', 'endDate', 'time', 'period', 'title', 'summary', 'place', 'category', 'deadline', 'done', 'todos'];
+const FIELDS = ['date', 'endDate', 'time', 'period', 'title', 'summary', 'place', 'category', 'deadline', 'done', 'todos', 'rk'];
 const pick = d => Object.fromEntries(FIELDS.map(k => [k, d[k]]));
 const print = d => JSON.stringify(FIELDS.map(k => d[k] === undefined ? null : d[k]));
+// 🧾 지운 일정 기록: 올린 것 기억 (암호 글자만 · m/e/t + 숫자·영문)
+const GONE_OK = /^[emt][0-9a-z]{1,20}$/;
+const GONEK = uid => 'allthat-web-gone:' + uid;
+const loadGone = uid => { try { return JSON.parse(localStorage.getItem(GONEK(uid))) || {}; } catch (e) { return {}; } };
+const saveGone = (uid, m) => { try { localStorage.setItem(GONEK(uid), JSON.stringify(m)); } catch (e) {} };
 const loadMap = uid => { try { return JSON.parse(localStorage.getItem(MAPK(uid))) || {}; } catch (e) { return {}; } };
 const saveMap = (uid, m) => { try { localStorage.setItem(MAPK(uid), JSON.stringify(m)); } catch (e) {} };
 // 이 브라우저의 일정을 비울 때는 「맞춘 기록」도 함께 지워야 해요.
@@ -44,6 +50,8 @@ async function start() {
   const app = initializeApp(CFG), auth = A.getAuth(app), db = F.getFirestore(app);
   let user = null, unsub = null, ready = false, timer = null, busy = false, again = false;
   const col = () => F.collection(db, 'users', user.uid, 'events');
+  const goneCol = () => F.collection(db, 'users', user.uid, 'gone');
+  let unsubGone = null;
 
   async function push() {
     if (!user || !ready) return;
@@ -61,12 +69,16 @@ async function start() {
         if (!ok) { busy = false; restart(); return; }
       }
       dels.forEach(id => ops.push(['del', id]));
+      // 🧾 지운 일정 기록(암호 글자만)도 올림 → 다른 기기에서 같은 메시지를 넣어도 다시 등록하지 않음
+      const gmap = loadGone(user.uid);
+      (B.gone ? B.gone() : []).filter(k => GONE_OK.test(k) && !gmap[k]).forEach(k => ops.push(['gone', k]));
       for (let i = 0; i < ops.length; i += 400) {
         const b = F.writeBatch(db);
-        ops.slice(i, i + 400).forEach(([k, id, d]) => k === 'set' ? b.set(F.doc(col(), id), { ...d, updatedAt: F.serverTimestamp() }) : b.delete(F.doc(col(), id)));
+        ops.slice(i, i + 400).forEach(([k, id, d]) => k === 'set' ? b.set(F.doc(col(), id), { ...d, updatedAt: F.serverTimestamp() })
+          : k === 'gone' ? b.set(F.doc(goneCol(), id), { at: F.serverTimestamp() }) : b.delete(F.doc(col(), id)));
         await b.commit();
-        ops.slice(i, i + 400).forEach(([k, id, , h]) => { if (k === 'set') map[id] = h; else delete map[id]; });
-        saveMap(user.uid, map);
+        ops.slice(i, i + 400).forEach(([k, id, , h]) => { if (k === 'set') map[id] = h; else if (k === 'gone') gmap[id] = 1; else delete map[id]; });
+        saveMap(user.uid, map); saveGone(user.uid, gmap);
       }
       B.cloudUi('ok', user);
     } catch (e) { console.error(e); B.cloudUi('err', '올리지 못했어요 · 인터넷 연결을 확인해 주세요'); }
@@ -95,6 +107,13 @@ async function start() {
       if (adds.length || updates.length || removes.length) B.applyRemote({ adds, updates, removes });
       if (!ready) { ready = true; push(); } else B.cloudUi('ok', user);
     }, e => { console.error(e); B.cloudUi('err', '클라우드 일정을 읽지 못했어요'); });
+    // 🧾 다른 기기에서 지운 일정 기록 받아 오기
+    if (unsubGone) { unsubGone(); unsubGone = null; }
+    unsubGone = F.onSnapshot(goneCol(), snap => {
+      const gmap = loadGone(user.uid), keys = [];
+      snap.docChanges().forEach(ch => { if (ch.type !== 'removed' && GONE_OK.test(ch.doc.id)) { keys.push(ch.doc.id); gmap[ch.doc.id] = 1; } });
+      saveGone(user.uid, gmap); if (keys.length && B.addGone) B.addGone(keys);
+    }, e => console.error(e));
   }
 
   // 「맞춘 기록」을 버리고 처음부터 다시 맞추기: 클라우드에만 있는 일정은 받아 오고, 이 브라우저에만 있는 일정은 올림 (지우지 않음)
@@ -107,6 +126,7 @@ async function start() {
 
   A.onAuthStateChanged(auth, async u => {
     if (unsub) { unsub(); unsub = null; }
+    if (unsubGone) { unsubGone(); unsubGone = null; }
     user = null; ready = false;
     if (!u) { B.cloudUi('out'); return; }
     let owner = ''; try { owner = localStorage.getItem(OWNER) || ''; } catch (e) {}
