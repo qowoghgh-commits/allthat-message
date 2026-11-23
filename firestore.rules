@@ -41,6 +41,15 @@ service cloud.firestore {
       allow create, update: if isOwner(uid) && validEvent(request.resource.data);
     }
 
+    // 🤖 선생님이 고친 예: 이름·전화번호를 가린 짧은 글 3칸 + 시각만
+    match /users/{uid}/lessons/{lessonId} {
+      allow read, delete: if isOwner(uid);
+      allow create, update: if isOwner(uid) && lessonId.size() <= 24
+        && request.resource.data.keys().hasOnly(['ev', 'wrong', 'right', 'at'])
+        && str(request.resource.data.ev, 60) && str(request.resource.data.wrong, 60) && str(request.resource.data.right, 120)
+        && request.resource.data.at is timestamp;
+    }
+
     // 🧾 지운 일정 기록: 문서 이름이 암호 글자(지문)이고, 안에는 시각(at) 하나만
     match /users/{uid}/gone/{goneId} {
       allow read, delete: if isOwner(uid);

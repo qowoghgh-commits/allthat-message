@@ -1668,7 +1668,7 @@ body.board-mode #nBanner{left:8px;right:8px;width:auto;bottom:8px}
 // ☁️ 웹판: PC 파일로 여는 기본판·AI판과 저장 공간을 나눠요 (같은 PC에서 열어도 서로 섞이지 않게)
 const WEB_BUILD = true;
 // 웹판 버전: 고쳐서 배포할 때마다 바꿈 → 오래 열어 둔 창(알림판 등)이 새 버전을 알아채고 저절로 새로고침
-const BUILD = '2026-11-23d';
+const BUILD = '2026-11-23f';
 const KEY = 'allthat-web-v1';
 const PREF = 'allthat-web-pref';
 let state = { messages: [], events: [] };
@@ -3599,6 +3599,7 @@ function evHTML(e, opts = {}) {
           <div class="cmenu-body">
             ${sibs ? '' : `<button type="button" data-edit-date="${e.id}">📅 날짜 바꾸기</button>`}
             <button type="button" data-open="${e.id}">✏️ 수정</button>
+            ${AI_BUILD ? `<button type="button" data-aire="${e.id}" title="잘못 다듬어졌을 때: 무엇이 틀렸는지 적으면 그 메시지만 Gemini로 다시 다듬고, 다음 다듬기에도 반영해요">🤖 다시 다듬기</button>` : ''}
             <button type="button" class="del" data-delev="${e.id}"${sibs ? ' data-grp="1"' : ''}>🗑 ${sibs ? '삭제 (날짜 ' + sibs.length + '개 모두)' : '삭제'}</button>
           </div>
         </details>
@@ -4845,7 +4846,7 @@ function submitEvent(form) {
   const old = id ? todoList(state.events.find(e => e.id === id)) : [];
   data.todos = String(f.get('todos') || '').split('\n').map(s => s.trim()).filter(Boolean)
     .map(t => ({ t, done: !!(old.find(o => o.t === t) || {}).done }));
-  if (id) { const cur = state.events.find(e => e.id === id); if (cur && cur.src && data.title && data.title !== cur.title) learnTitle(cur.src, data.title); Object.assign(cur, data); }
+  if (id) { const cur = state.events.find(e => e.id === id); if (cur && cur.src && data.title && data.title !== cur.title) learnTitle(cur.src, data.title); const before = cur ? { title: cur.title, date: cur.date, time: cur.time, period: cur.period } : null; Object.assign(cur, data); if (before) aiLearnEdit(cur, before); }
   else if (dlgState.inbox) {
     // 미반영 메시지로 일정 만들기: 메시지를 메시지함으로 옮기고 일정과 연결, 미반영 목록에서는 뺌
     const ib = (state.inbox || []).find(x => x.id === dlgState.inbox.id);
@@ -5179,6 +5180,7 @@ function editTitleInline(btn) {
     if (done) return; done = true;
     const v = inp.value.trim();
     if (ok && v && v !== ev.title) {
+      aiLearnEdit({ ...ev, title: v }, { title: ev.title, date: ev.date, time: ev.time, period: ev.period });   // 🤖 다듬은 제목을 고치면 다음 다듬기에 반영
       const grouped = !!inp.closest('.card').querySelector('.dates'); if (ev.src) learnTitle(ev.src, v);
       // 어떤 종류의 후보를 골랐는지 기억 → 다음에 그 종류 후보에 점수를 조금 더 줌
       if (pickedKind) { state.titlePick = state.titlePick || {}; state.titlePick[pickedKind] = (state.titlePick[pickedKind] || 0) + 1; }
@@ -5203,7 +5205,8 @@ function editDateInline(btn) {
     const v = inp.value;
     if (ok && v && v !== ev.date) {
       if (ev.endDate) { const len = diffDays(ev.endDate, ev.date); ev.endDate = ymd(addDays(toDate(v), len)); }
-      ev.date = v; save(); toast(`날짜를 ${fmtDate(v)}로 바꿨어요.`);
+      const before = { title: ev.title, date: ev.date, time: ev.time, period: ev.period };
+      ev.date = v; aiLearnEdit(ev, before); save(); toast(`날짜를 ${fmtDate(v)}로 바꿨어요.`);
     }
     render();
   };
@@ -5760,16 +5763,19 @@ const AI_RULES = `너는 한국 초등학교 교사가 받은 쿨메신저·카�
 답은 JSON만: {"messages":[{"id":"메시지 id","events":[{"ref":"기존결과 id 또는 null","status":"확정","date":"YYYY-MM-DD 또는 null","end":"","candidates":[],"time":"HH:MM 또는 빈 문자열","period":"","title":"","summary":"","category":"","deadline":false,"slots":{},"mine":true,"confidence":0.9,"evidence":"","reason":"20자 이내"}]}]}`;
 // 선생님이 고른 결과로 배우기: 최근 판단 예시 + 선생님이 쓰는 제목 예시
 function aiExamples() {
-  const fb = (state.aiFeedback || []).slice(-8), tm = (state.titleMemory || []).slice(-8).map(e => e.t).filter(Boolean);
+  const fb = (state.aiFeedback || []).slice(-8), tm = (state.titleMemory || []).slice(-8).map(e => e.t).filter(Boolean), ls = (state.aiLessons || []).slice(-10);
   let s = '';
   if (fb.length) s += '\n선생님이 직접 고른 예 (이런 판단을 따라 줘):\n' + fb.map(f => `- 「${f.ev}」: 기존 ${f.rule || '없음'} / Gemini ${f.ai} → 선생님 선택: ${f.pick}`).join('\n');
+  // 🤖 잘못 다듬어져 선생님이 고친 예 → 같은 실수를 하지 않게
+  if (ls.length) s += '\n선생님이 고친 예 (다듬은 결과가 틀렸던 경우야. 같은 실수를 하지 마):\n' + ls.map(l => `- 근거「${l.ev}」: 다듬은 결과 ${l.wrong || '-'} → 선생님: ${l.right}`).join('\n');
   if (tm.length) s += '\n선생님이 쓰는 제목 예: ' + tm.map(t => `「${t}」`).join(', ');
   return s;
 }
 function aiPrompt(items) {
   const t = todayStr(), wd = d => `${d}(${WD[toDate(d).getDay()]})`, role = String(aiCfg().role || '').trim();
   const roleTxt = role ? `\n선생님 정보: ${role}. mine은 이 선생님이 챙겨야 하는 일이면 true, 다른 학년·다른 사람만 해당하면 false.` : '\nmine은 항상 true로 둬.';
-  return AI_RULES + roleTxt + aiExamples() + `\n오늘: ${wd(t)}\n달력표 (날짜는 반드시 여기서 골라):\n${aiCalendar(items)}\n메시지:\n` + JSON.stringify(items.map(x => ({ id: x.id, 받은날: wd(x.date), 보낸곳: x.from, 원문: x.body, ...(x.ctx ? { 앞뒤대화: x.ctx } : {}), ...(x.rel && x.rel.length ? { 관련메시지: x.rel } : {}), 기존결과: x.evs.map(e => ({ id: e.id, date: e.date, end: e.endDate && e.endDate !== e.date ? e.endDate : '', time: e.time || '', period: e.period || '', title: e.title, category: e.category, deadline: !!e.deadline })) })));
+  const hintTxt = items.some(x => x.hint) ? '\n선생님메모가 있는 메시지는 예전에 잘못 다듬어진 거야. 선생님메모를 가장 먼저 따르고, 기존결과에 같은 실수가 있으면 고쳐.' : '';
+  return AI_RULES + roleTxt + aiExamples() + hintTxt + `\n오늘: ${wd(t)}\n달력표 (날짜는 반드시 여기서 골라):\n${aiCalendar(items)}\n메시지:\n` + JSON.stringify(items.map(x => ({ id: x.id, 받은날: wd(x.date), 보낸곳: x.from, 원문: x.body, ...(x.hint ? { 선생님메모: x.hint } : {}), ...(x.ctx ? { 앞뒤대화: x.ctx } : {}), ...(x.rel && x.rel.length ? { 관련메시지: x.rel } : {}), 기존결과: x.evs.map(e => ({ id: e.id, date: e.date, end: e.endDate && e.endDate !== e.date ? e.endDate : '', time: e.time || '', period: e.period || '', title: e.title, category: e.category, deadline: !!e.deadline })) })));
 }
 // 다듬을 메시지 목록: 앞으로 남은 일정이 있는 메시지부터 → 그다음 나머지 (이미 다듬은 것은 빼고)
 async function aiQueue(onlyIds) {
@@ -5786,7 +5792,7 @@ async function aiQueue(onlyIds) {
     .map(o => ({ o, n: W(o).filter(w => W(m).includes(w)).length })).filter(x => x.n >= 2).sort((a, b) => b.n - a.n).slice(0, 2)
     .map(x => `${x.o.received}: ${cut(x.o.body, 220)}`);
   const ctxOf = m => Array.isArray(m.ctx) && m.ctx.length > 1 ? cut(m.ctx.filter(c => !c.me).map(c => `${c.sender} ${c.time}: ${c.body}`).join('\n'), 700) : '';
-  const items = msgs.map(m => ({ id: m.id, kind: 'msg', date: m.received, from: [m.source, m.sender].filter(Boolean).join(' · ').slice(0, 40), body: cut(m.body), ctx: ctxOf(m), rel: related(m), evs: evBy[m.id] || [] }));
+  const items = msgs.map(m => ({ id: m.id, kind: 'msg', date: m.received, from: [m.source, m.sender].filter(Boolean).join(' · ').slice(0, 40), body: cut(m.body), ctx: ctxOf(m), rel: related(m), evs: evBy[m.id] || [], ...(aiHints[m.id] ? { hint: cut(aiHints[m.id], 200) } : {}) }));
   // 최근 30일 미반영(📭) 메시지에서 놓친 일정 찾기
   if (!onlyIds) {
     const from = ymd(addDays(toDate(t), -30));
@@ -5954,6 +5960,43 @@ async function aiRun(onlyIds) {
   else if (aiProg.auto) toast(`🤖 Gemini가 제목·요약 ${aiProg.auto}개를 다듬었어요.`);
 }
 let aiWaitIds = new Set(), aiAutoRun = false;
+// 🤖 다시 다듬기: 선생님 메모(무엇이 틀렸는지) → 그 메시지에만 붙여 보냄
+const aiHints = {};
+// 선생님이 고친 예 기억 (다음 다듬기 예시로) — 근거 문장은 이름·전화번호를 가려서 저장
+function aiLearn(e, wrong, right) {
+  if (!right) return;
+  const ev = aiMask(String(e.src || e.title || '')).replace(/\s+/g, ' ').trim().slice(0, 60);
+  state.aiLessons = (state.aiLessons || []).filter(l => !(l.ev === ev && l.right === right)).concat([{ ev, wrong: String(wrong || '').slice(0, 60), right: String(right).slice(0, 120), at: Date.now() }]).slice(-30);
+}
+const aiDesc = e => [fmtDate(e.date), e.time || e.period || '', `「${e.title}」`].filter(Boolean).join(' ');
+// Gemini가 다듬은 일정을 선생님이 직접 고치면 → 「선생님이 고친 예」로 기억
+function aiLearnEdit(e, before) {
+  if (!AI_BUILD || !e || !(e.aiBy === 'ai' || e.aiBy === 'both')) return;
+  const ch = [];
+  if (before.title !== e.title) ch.push(`제목은 「${e.title}」`);
+  if (before.date !== e.date) ch.push(`날짜는 ${fmtDate(e.date)}`);
+  if ((before.time || '') !== (e.time || '')) ch.push(`시간은 ${e.time || '없음'}`);
+  if ((before.period || '') !== (e.period || '')) ch.push(`교시는 ${e.period || '없음'}`);
+  if (ch.length) aiLearn(e, aiDesc(before), ch.join(', ') + '이(가) 맞아요');
+}
+async function aiRedo(id) {
+  const e = state.events.find(x => x.id === id); if (!e) return;
+  if (DEMO) { toast('🎬 데모 모드에서는 Gemini에 보내지 않아요.'); return; }
+  if (!aiCfg().key) { toast('⚙ 설정의 「🤖 Gemini 도움」에 키를 먼저 넣어 주세요.'); return; }
+  const m = e.msgId && state.messages.find(x => x.id === e.msgId);
+  if (!m) { toast('원래 메시지가 이 기기에 없어서 다시 다듬을 수 없어요. 메시지 파일을 넣은 기기에서 눌러 주세요.'); return; }
+  const note = prompt(`「${e.title}」을(를) 다시 다듬어요.\n\n무엇이 잘못됐나요? (예: 날짜는 12월 3일이 맞아요 / 제목에 장소를 넣지 마세요)\n비워 두고 확인을 눌러도 돼요. 적은 내용은 다음 다듬기에도 반영돼요.`, '');
+  if (note === null) return;
+  if (note.trim()) { aiLearn(e, aiDesc(e), note.trim()); aiHints[m.id] = note.trim(); }
+  // 다듬은 기록을 지워야 다시 보낼 수 있음
+  if (state.aiDone) delete state.aiDone[m.id];
+  if (state.gone) delete state.gone[aiMsgKey(m)];
+  save(); toast('🤖 이 메시지를 다시 다듬는 중이에요…');
+  if (aiRunning) { aiWaitIds.add(m.id); return; }
+  await aiRun([m.id]);
+  delete aiHints[m.id];
+}
+document.addEventListener('click', e => { const b = e.target.closest('[data-aire]'); if (!b) return; const menu = b.closest('details.cmenu'); if (menu) menu.open = false; aiRedo(b.dataset.aire); });
 function aiAfterSave(ids) {
   if (!AI_BUILD || DEMO || BOARD || !ids || !ids.length || !aiCfg().auto || !aiCfg().key) return;
   if (aiRunning) { ids.forEach(i => aiWaitIds.add(i)); return; }   // 다듬는 중이면 끝난 뒤 이어서
@@ -6482,6 +6525,11 @@ window.allthatBridge = {
   toast: m => toast(m),
   events: () => state.events,
   hasLocal: () => state.events.length > 0 || state.messages.length > 0,
+  // 🤖 선생님이 고친 예(이름·전화번호 가린 짧은 글): 학교·집에서 함께 쓰기
+  lessons: () => (state.aiLessons || []).slice(-30),
+  addLessons(list) { if (!list || !list.length) return; const cur = state.aiLessons || [], key = l => l.ev + '|' + l.right; const have = new Set(cur.map(key)); let n = 0;
+    list.forEach(l => { if (l && l.right && !have.has(key(l))) { cur.push({ ev: String(l.ev || '').slice(0, 60), wrong: String(l.wrong || '').slice(0, 60), right: String(l.right).slice(0, 120), at: l.at || Date.now() }); have.add(key(l)); n++; } });
+    if (n) { state.aiLessons = cur.sort((a, b) => (a.at || 0) - (b.at || 0)).slice(-30); try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} } },
   // 🧾 지운 일정 기록(암호 글자만): 클라우드와 주고받기
   gone: () => Object.keys(state.gone || {}),
   addGone(keys) { if (!keys || !keys.length) return; state.gone = state.gone || {}; let n = 0; keys.forEach(k => { if (!state.gone[k]) { state.gone[k] = Date.now(); n++; } }); if (n) { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} } },
@@ -6532,7 +6580,7 @@ document.getElementById('cloudBtn').addEventListener('click', async () => {
   await C.signOut(clear); toast(clear ? '로그아웃하고 이 브라우저의 내용을 지웠어요.' : '로그아웃했어요.');
 });
 </script>
-<script src="firebase-config.js?v=2026-11-23d"></script>
-<script type="module" src="cloud.js?v=2026-11-23d"></script>
+<script src="firebase-config.js?v=2026-11-23f"></script>
+<script type="module" src="cloud.js?v=2026-11-23f"></script>
 </body>
 </html>

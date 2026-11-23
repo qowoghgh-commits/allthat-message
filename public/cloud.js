@@ -31,6 +31,8 @@ const print = d => JSON.stringify(FIELDS.map(k => d[k] === undefined ? null : d[
 // 🧾 지운 일정 기록: 올린 것 기억 (암호 글자만 · m/e/t + 숫자·영문)
 const GONE_OK = /^[emtsa][0-9a-z]{1,20}$/;   // e·s·t: 지운 일정 · a: Gemini로 다듬은 메시지
 const GONEK = uid => 'allthat-web-gone:' + uid;
+// 고친 예 문서 이름: 근거+고친 내용으로 만든 짧은 암호 글자 (같은 예는 한 번만)
+const lessonId = l => { let h = 5381; const s = String(l.ev || '') + '|' + String(l.right || ''); for (let i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0; return 'l' + h.toString(36) + s.length.toString(36); };
 const loadGone = uid => { try { return JSON.parse(localStorage.getItem(GONEK(uid))) || {}; } catch (e) { return {}; } };
 const saveGone = (uid, m) => { try { localStorage.setItem(GONEK(uid), JSON.stringify(m)); } catch (e) {} };
 const loadMap = uid => { try { return JSON.parse(localStorage.getItem(MAPK(uid))) || {}; } catch (e) { return {}; } };
@@ -53,7 +55,8 @@ async function start() {
   let user = null, unsub = null, ready = false, timer = null, busy = false, again = false;
   const col = () => F.collection(db, 'users', user.uid, 'events');
   const goneCol = () => F.collection(db, 'users', user.uid, 'gone');
-  let unsubGone = null;
+  const lessonCol = () => F.collection(db, 'users', user.uid, 'lessons');
+  let unsubGone = null, unsubLesson = null;
 
   async function push() {
     if (!user || !ready) return;
@@ -74,12 +77,15 @@ async function start() {
       // 🧾 지운 일정 기록(암호 글자만)도 올림 → 다른 기기에서 같은 메시지를 넣어도 다시 등록하지 않음
       const gmap = loadGone(user.uid);
       (B.gone ? B.gone() : []).filter(k => GONE_OK.test(k) && !gmap[k]).forEach(k => ops.push(['gone', k]));
+      // 🤖 선생님이 고친 예도 올림 (이름·전화번호는 앱에서 이미 가림 · 한 번 더 가림)
+      (B.lessons ? B.lessons() : []).forEach(l => { const lid = lessonId(l); if (!gmap[lid]) ops.push(['lesson', lid, { ev: B.mask(String(l.ev || '')).slice(0, 60), wrong: B.mask(String(l.wrong || '')).slice(0, 60), right: B.mask(String(l.right || '')).slice(0, 120) }]); });
       for (let i = 0; i < ops.length; i += 400) {
         const b = F.writeBatch(db);
         ops.slice(i, i + 400).forEach(([k, id, d]) => k === 'set' ? b.set(F.doc(col(), id), { ...d, updatedAt: F.serverTimestamp() })
-          : k === 'gone' ? b.set(F.doc(goneCol(), id), { at: F.serverTimestamp() }) : b.delete(F.doc(col(), id)));
+          : k === 'gone' ? b.set(F.doc(goneCol(), id), { at: F.serverTimestamp() })
+          : k === 'lesson' ? b.set(F.doc(lessonCol(), id), { ...d, at: F.serverTimestamp() }) : b.delete(F.doc(col(), id)));
         await b.commit();
-        ops.slice(i, i + 400).forEach(([k, id, , h]) => { if (k === 'set') map[id] = h; else if (k === 'gone') gmap[id] = 1; else delete map[id]; });
+        ops.slice(i, i + 400).forEach(([k, id, , h]) => { if (k === 'set') map[id] = h; else if (k === 'gone' || k === 'lesson') gmap[id] = 1; else delete map[id]; });
         saveMap(user.uid, map); saveGone(user.uid, gmap);
       }
       B.cloudUi('ok', user);
@@ -116,6 +122,14 @@ async function start() {
       snap.docChanges().forEach(ch => { if (ch.type !== 'removed' && GONE_OK.test(ch.doc.id)) { keys.push(ch.doc.id); gmap[ch.doc.id] = 1; } });
       saveGone(user.uid, gmap); if (keys.length && B.addGone) B.addGone(keys);
     }, e => console.error(e));
+    // 🤖 다른 기기에서 고친 예 받아 오기
+    if (unsubLesson) { unsubLesson(); unsubLesson = null; }
+    unsubLesson = F.onSnapshot(lessonCol(), snap => {
+      const gmap = loadGone(user.uid), list = [];
+      snap.docChanges().forEach(ch => { if (ch.type === 'removed') return; const d = ch.doc.data() || {}; gmap[ch.doc.id] = 1;
+        list.push({ ev: d.ev || '', wrong: d.wrong || '', right: d.right || '', at: d.at && d.at.toMillis ? d.at.toMillis() : Date.now() }); });
+      saveGone(user.uid, gmap); if (list.length && B.addLessons) B.addLessons(list);
+    }, e => console.error(e));
   }
 
   // 「맞춘 기록」을 버리고 처음부터 다시 맞추기: 클라우드에만 있는 일정은 받아 오고, 이 브라우저에만 있는 일정은 올림 (지우지 않음)
@@ -129,6 +143,7 @@ async function start() {
   A.onAuthStateChanged(auth, async u => {
     if (unsub) { unsub(); unsub = null; }
     if (unsubGone) { unsubGone(); unsubGone = null; }
+    if (unsubLesson) { unsubLesson(); unsubLesson = null; }
     user = null; ready = false;
     if (!u) { B.cloudUi('out'); return; }
     let owner = ''; try { owner = localStorage.getItem(OWNER) || ''; } catch (e) {}
