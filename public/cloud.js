@@ -29,7 +29,7 @@ const FIELDS = ['date', 'endDate', 'time', 'period', 'title', 'summary', 'place'
 const pick = d => Object.fromEntries(FIELDS.map(k => [k, d[k]]));
 const print = d => JSON.stringify(FIELDS.map(k => d[k] === undefined ? null : d[k]));
 // 🧾 지운 일정 기록: 올린 것 기억 (암호 글자만 · m/e/t + 숫자·영문)
-const GONE_OK = /^[emts][0-9a-z]{1,20}$/;
+const GONE_OK = /^[emtsa][0-9a-z]{1,20}$/;   // e·s·t: 지운 일정 · a: Gemini로 다듬은 메시지
 const GONEK = uid => 'allthat-web-gone:' + uid;
 const loadGone = uid => { try { return JSON.parse(localStorage.getItem(GONEK(uid))) || {}; } catch (e) { return {}; } };
 const saveGone = (uid, m) => { try { localStorage.setItem(GONEK(uid), JSON.stringify(m)); } catch (e) {} };

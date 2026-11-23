@@ -1668,7 +1668,7 @@ body.board-mode #nBanner{left:8px;right:8px;width:auto;bottom:8px}
 // ☁️ 웹판: PC 파일로 여는 기본판·AI판과 저장 공간을 나눠요 (같은 PC에서 열어도 서로 섞이지 않게)
 const WEB_BUILD = true;
 // 웹판 버전: 고쳐서 배포할 때마다 바꿈 → 오래 열어 둔 창(알림판 등)이 새 버전을 알아채고 저절로 새로고침
-const BUILD = '2026-11-23c';
+const BUILD = '2026-11-23d';
 const KEY = 'allthat-web-v1';
 const PREF = 'allthat-web-pref';
 let state = { messages: [], events: [] };
@@ -3310,6 +3310,23 @@ function healPeriod(e) {
   if (!e || !e.period || !e.period.includes('○○○')) return false;
   const p = e.period.replace(/(\d)\s*○○○/g, '$1교시').replace(/○○○/g, '');
   if (p === e.period) return false; e.period = p.trim(); return true;
+}
+// 🤖 다듬은 메시지 기록(지문): 메시지 번호가 달라도(다시 넣기·다른 기기) 같은 메시지면 다시 다듬지 않음
+//    state.gone 에 「a…」 글자로 함께 넣어 클라우드에도 올라감 (암호 글자만)
+const aiMsgKey = m => 'a' + hashKey(['a', m.received || '', normK(m.body).slice(0, 300)].join('|'));   // 받은 날 + 내용만 (보낸 사람·방 이름 표기 차이 무시)
+const aiIbKey = it => 'a' + hashKey(['ib', it.date || '', it.sender || '', normK(it.title || it.excerpt || '').slice(0, 80)].join('|'));
+function aiIsDone(m) { const g = state.gone || {}; return !!(g[aiMsgKey(m)] || (state.aiDone || {})[m.id]); }
+function aiMarkDone(itemId) {
+  state.gone = state.gone || {}; const now = Date.now(), id = String(itemId);
+  if (id.startsWith('ib:')) { const it = (state.inbox || []).find(x => 'ib:' + x.id === id); if (it) state.gone[aiIbKey(it)] = now; return; }
+  const m = state.messages.find(x => x.id === id); if (m) state.gone[aiMsgKey(m)] = now;
+}
+// 예전에 다듬은 기록(메시지 번호)도 지문으로 옮겨 둠 → 다른 기기와 나눔
+function backfillAiDone() {
+  let n = 0; const g = state.gone = state.gone || {};
+  Object.keys(state.aiDone || {}).forEach(id => { if (id.startsWith('ib:')) { const it = (state.inbox || []).find(x => 'ib:' + x.id === id); if (it && !g[aiIbKey(it)]) { g[aiIbKey(it)] = state.aiDone[id]; n++; } return; }
+    const m = state.messages.find(x => x.id === id); if (m && !g[aiMsgKey(m)]) { g[aiMsgKey(m)] = state.aiDone[id]; n++; } });
+  return n;
 }
 // 새로 찾은 일정이 이미 있거나(dup) 지운 것(gone)인지
 function knownOf(e, fp, received) {
@@ -5571,7 +5588,7 @@ load();
   state.messages = state.messages.filter(m => !empty.has(m.id)); state.events = state.events.filter(e => !empty.has(e.msgId)); save();
 })();
 (() => { let ch = 0; state.messages.forEach(m => { if (NO_TITLE.test(m.subject || '')) { const t = contentTitle(m.body); if (t && t !== '(제목 없음)') { m.subject = t; ch++; } } }); if (ch) save(); })();
-if (!DEMO && !BOARD) { try { if (backfillRk()) save(); } catch (e) {} }   // 🧾 예전 일정에도 꼬리표 붙이기
+if (!DEMO && !BOARD) { try { if (backfillRk() + backfillAiDone()) save(); } catch (e) {} }   // 🧾 예전 일정에도 꼬리표 붙이기 · 🤖 다듬은 기록 지문으로
 if (!DEMO) { try { let n = 0; state.events.forEach(e => { if (healPeriod(e)) n++; }); if (n) save(); } catch (e) {} }   // 「1-2○○○」 → 「1-2교시」
 // (한 번만) 예전에 들어간 학사일정을 모두 지우고, 앞으로는 선생님이 올린 파일에서만 학사일정을 가져옴
 let acadResetSnap = null;
@@ -5758,7 +5775,8 @@ function aiPrompt(items) {
 async function aiQueue(onlyIds) {
   const done = state.aiDone || {}, t = todayStr(), evBy = {};
   state.events.forEach(e => { if (e.msgId) (evBy[e.msgId] = evBy[e.msgId] || []).push(e); });
-  let msgs = state.messages.filter(m => m.body && (onlyIds ? onlyIds.includes(m.id) : !done[m.id] && evBy[m.id]));
+  // 🤖 한 번 다듬은 메시지는 다시 보내지 않음 (이 기기·다른 기기에서 다듬은 기록 모두)
+  let msgs = state.messages.filter(m => m.body && !aiIsDone(m) && (onlyIds ? onlyIds.includes(m.id) : !done[m.id] && evBy[m.id]));
   const last = m => (evBy[m.id] || []).reduce((a, e) => (e.endDate || e.date) > a ? (e.endDate || e.date) : a, '');
   msgs.sort((a, b) => { const fa = last(a) >= t, fb = last(b) >= t; return fa !== fb ? (fa ? -1 : 1) : fa ? last(a).localeCompare(last(b)) : b.received.localeCompare(a.received); });
   const mask = aiCfg().mask, cut = (s, n) => (mask ? aiMask(s) : String(s || '')).slice(0, n || 1800);
@@ -5772,7 +5790,7 @@ async function aiQueue(onlyIds) {
   // 최근 30일 미반영(📭) 메시지에서 놓친 일정 찾기
   if (!onlyIds) {
     const from = ymd(addDays(toDate(t), -30));
-    for (const it of (state.inbox || []).filter(x => !x.ok && !done['ib:' + x.id] && x.date >= from && x.reason !== 'reply' && x.reason !== 'past')) {
+    for (const it of (state.inbox || []).filter(x => !x.ok && !done['ib:' + x.id] && !(state.gone || {})[aiIbKey(x)] && x.date >= from && x.reason !== 'reply' && x.reason !== 'past')) {
       let b = ''; try { b = await inboxBody(it); } catch (e) { b = it.excerpt || ''; }
       items.push({ id: 'ib:' + it.id, kind: 'ib', date: it.date, from: [it.source, it.sender].filter(Boolean).join(' · ').slice(0, 40), body: cut(b), ctx: '', rel: [], evs: [] });
     }
@@ -5911,6 +5929,7 @@ async function aiRun(onlyIds) {
       ['same', 'auto', 'warn', 'newc', 'slot'].forEach(k => aiProg[k] += r[k]);
       madeAll.push(...r.made);
       state.aiDone[item.id] = Date.now();
+      aiMarkDone(item.id);   // 🤖 지문으로도 기록 → 같은 메시지를 다시 넣거나 다른 기기에서 넣어도 다시 다듬지 않음
     });
     save(); aiProg.done++; aiProg.msg = ''; render(); aiRender();
     if (i + N < items.length) await sleep(4500);   // 무료 한도를 넘지 않게 천천히
@@ -6513,7 +6532,7 @@ document.getElementById('cloudBtn').addEventListener('click', async () => {
   await C.signOut(clear); toast(clear ? '로그아웃하고 이 브라우저의 내용을 지웠어요.' : '로그아웃했어요.');
 });
 </script>
-<script src="firebase-config.js?v=2026-11-23c"></script>
-<script type="module" src="cloud.js?v=2026-11-23c"></script>
+<script src="firebase-config.js?v=2026-11-23d"></script>
+<script type="module" src="cloud.js?v=2026-11-23d"></script>
 </body>
 </html>
